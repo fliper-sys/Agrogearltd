@@ -13,7 +13,7 @@ export default function AuthScreen() {
   const { isSm } = useBreakpoint();
   const router = useRouter();
   const toast = useToast();
-  const { user, loading, recovering, signIn, signUp, resetPassword } = useAuth();
+  const { user, loading, recovering, signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
 
   const [mode, setMode] = useState<Mode>('signin');
   const [name, setName] = useState('');
@@ -59,6 +59,13 @@ export default function AuthScreen() {
     setBusy(false);
   };
 
+  const google = async () => {
+    setError(null);
+    setInfo(null);
+    const res = await signInWithGoogle();
+    if (res.error) setError(res.error);
+  };
+
   const title = mode === 'signin' ? 'Welcome back.' : mode === 'signup' ? 'Join AgroGear.' : 'Reset your password.';
   const subtitle =
     mode === 'signin'
@@ -80,6 +87,17 @@ export default function AuthScreen() {
 
         {!isSupabaseConfigured ? (
           <ErrorText>Authentication is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.</ErrorText>
+        ) : null}
+
+        {mode !== 'forgot' ? (
+          <View style={{ marginBottom: 18 }}>
+            <Button variant="secondary" label="G   Continue with Google" onPress={google} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+              <T style={{ color: colors.muted, fontSize: 12 }}>or use email</T>
+              <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+            </View>
+          </View>
         ) : null}
 
         <View style={{ gap: 16 }}>
