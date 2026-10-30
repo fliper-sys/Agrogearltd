@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '@/context/AuthContext';
 import { MarketProvider } from '@/context/MarketContext';
+import { RentalsProvider } from '@/context/RentalsContext';
 import { ToastProvider } from '@/components/Toast';
 import { colors } from '@/lib/theme';
 
@@ -13,12 +14,14 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <MarketProvider>
-          <ToastProvider>
-            <View style={{ flex: 1, backgroundColor: colors.cream }}>
-              <StatusBar style="dark" />
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }} />
-            </View>
-          </ToastProvider>
+          <RentalsProvider>
+            <ToastProvider>
+              <View style={{ flex: 1, backgroundColor: colors.cream }}>
+                <StatusBar style="dark" />
+                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }} />
+              </View>
+            </ToastProvider>
+          </RentalsProvider>
         </MarketProvider>
       </AuthProvider>
     </SafeAreaProvider>

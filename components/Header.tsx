@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useRentals } from '@/context/RentalsContext';
 import { colors, useBreakpoint, web } from '@/lib/theme';
 import { Brand, Button, T } from './ui';
 
@@ -33,8 +34,11 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
   const { isSm, isMd } = useBreakpoint();
   const { user, displayName, signOut } = useAuth();
   const router = useRouter();
+  const { actionNeeded, unread } = useRentals();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const badge = Math.max(actionNeeded, unread);
+  const rentLabel = `My rentals${badge ? ` (${badge})` : ''}`;
   const favLabel = `♥ Favourites${favouriteCount ? ` (${favouriteCount})` : ''}`;
   const go = (fn: () => void) => () => {
     setMenuOpen(false);
@@ -55,6 +59,7 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
       >
         <T style={{ color: colors.green, fontWeight: '800', fontSize: 14 }}>{displayName.charAt(0).toUpperCase()}</T>
       </View>
+      <NavLink label="Profile" onPress={go(() => router.push('/profile'))} />
       <NavLink label="Sign out" onPress={go(() => signOut())} />
     </View>
   ) : (
@@ -115,6 +120,7 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
             <NavLink label="Marketplace" onPress={onMarketplace} />
             <NavLink label={favLabel} onPress={onFavourites} active={showingFavourites} />
             <NavLink label="List equipment" onPress={onList} />
+            {user ? <NavLink label={rentLabel} onPress={() => router.push('/rentals')} /> : null}
             {authControl}
             <Button label="Find equipment ↗" onPress={onMarketplace} />
           </View>
@@ -135,6 +141,7 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
           <NavLink label="Marketplace" onPress={go(onMarketplace)} />
           <NavLink label={favLabel} onPress={go(onFavourites)} active={showingFavourites} />
           <NavLink label="List equipment" onPress={go(onList)} />
+          {user ? <NavLink label={rentLabel} onPress={go(() => router.push('/rentals'))} /> : null}
           {authControl}
         </View>
       ) : null}

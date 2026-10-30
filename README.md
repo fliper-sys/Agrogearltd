@@ -38,3 +38,30 @@ Project Settings → Environment Variables, then deploy. Redeploy after changing
 - `context/` — `AuthContext` (Supabase auth), `MarketContext` (equipment, favourites, bookings)
 - `lib/` — theme tokens (palette + breakpoints), seed data, Supabase client
 - `supabase/schema.sql` — tables, RLS policies, seed data
+
+
+## v2 upgrade: verified profiles, smarter search, full rental flow
+
+### One-time setup
+1. Run `supabase/migrations/002_v2_upgrade.sql` in Supabase → SQL Editor (after `schema.sql`). Safe to re-run.
+2. Make yourself an admin: `update public.profiles set is_admin = true where id = '<your user uuid>';`
+3. **Payments**
+   - *Testing:* run `supabase/demo_payments.sql` and set `EXPO_PUBLIC_DEMO_PAYMENTS=true`.
+   - *Production:* set `EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY`, then deploy the edge function:
+     `supabase functions deploy verify-payment` and `supabase secrets set PAYSTACK_SECRET_KEY=sk_live_...`.
+     Do **not** run `demo_payments.sql` in production.
+4. Redeploy on Vercel after changing env vars.
+
+### Rental lifecycle
+`pending` → owner approves → `approved` → renter pays (held) → `paid` → owner dispatches → `dispatched` →
+renter confirms receipt → `active` (**countdown starts**) → renter marks returned → `returned` → owner confirms → `completed`
+(deposit released, review unlocked). Any side can open a dispute once the machine is dispatched.
+All transitions, prices and double-booking checks are enforced in Postgres (`create_booking`, `advance_booking`);
+the app cannot skip steps or change prices.
+
+### New screens
+`/profile` (details, verification, notifications, listings) · `/rentals` (renter and owner views, countdown, updates) · `/admin` (ID review queue).
+
+### Not included yet
+Real money payouts to owners (release funds manually from Paystack for now), push/SMS delivery of reminders
+(in-app countdown and updates only), rental extensions, in-app chat, native photo/ID upload (web only).
