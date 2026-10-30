@@ -3,6 +3,23 @@ export type Category = 'Tractors' | 'Harvesters' | 'Planting' | 'Tillage' | 'Tra
 export const CATEGORIES: Category[] = ['Tractors', 'Harvesters', 'Planting', 'Tillage', 'Transport', 'Irrigation'];
 export const ALL_CATEGORIES = 'All equipment';
 
+export const NIGERIA_STATES = [
+  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno', 'Cross River', 'Delta',
+  'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi',
+  'Kogi', 'Kwara', 'Lagos', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
+  'Taraba', 'Yobe', 'Zamfara',
+];
+
+export const CONDITIONS = ['New', 'Excellent', 'Good', 'Fair'] as const;
+
+export const ID_TYPES: { value: string; label: string }[] = [
+  { value: 'nin', label: 'National ID (NIN)' },
+  { value: 'voters_card', label: "Voter's card" },
+  { value: 'drivers_licence', label: "Driver's licence" },
+  { value: 'passport', label: 'International passport' },
+  { value: 'cac', label: 'CAC business registration' },
+];
+
 export type Equipment = {
   id: number;
   ownerId: string | null;
@@ -10,11 +27,47 @@ export type Equipment = {
   category: string;
   price: number;
   location: string;
+  state: string;
   description: string;
   emoji: string;
   badge: string;
   color: string;
   featured: boolean;
+  condition: string;
+  yearMade: number | null;
+  specs: string;
+  deposit: number;
+  minDays: number;
+  pickupAvailable: boolean;
+  deliveryAvailable: boolean;
+  deliveryFee: number;
+  withOperator: boolean;
+  images: string[];
+  ownerName: string;
+  ownerVerified: boolean;
+  avgRating: number;
+  reviewCount: number;
+  createdAt: string;
+};
+
+/** Defaults for the fields added in v2, used by the offline seed data. */
+export const EQUIPMENT_DEFAULTS = {
+  state: '',
+  condition: 'Good',
+  yearMade: null,
+  specs: '',
+  deposit: 0,
+  minDays: 1,
+  pickupAvailable: true,
+  deliveryAvailable: false,
+  deliveryFee: 0,
+  withOperator: false,
+  images: [] as string[],
+  ownerName: '',
+  ownerVerified: false,
+  avgRating: 0,
+  reviewCount: 0,
+  createdAt: '',
 };
 
 export const CATEGORY_EMOJI: Record<string, string> = {
@@ -27,7 +80,7 @@ export const CATEGORY_EMOJI: Record<string, string> = {
 };
 
 /** Showcase listings. Also used as an offline fallback if the database cannot be reached. */
-export const SEED_EQUIPMENT: Equipment[] = [
+const RAW_SEED = [
   { id: 1, ownerId: null, name: 'John Deere 5050D', category: 'Tractors', price: 85000, location: 'Abuja, FCT', emoji: '🚜', badge: 'Popular', color: '#e7eedf', featured: true, description: 'Versatile utility tractor for ploughing, cultivation, and general farm operations. Ask the owner about implements and delivery.' },
   { id: 2, ownerId: null, name: 'Combine Harvester', category: 'Harvesters', price: 220000, location: 'Kaduna, Kaduna', emoji: '🌾', badge: 'High capacity', color: '#f2ead7', featured: true, description: 'A harvesting solution designed to help reduce harvesting time. Confirm crop compatibility, capacity, and operator availability with the owner.' },
   { id: 3, ownerId: null, name: 'Heavy Duty Plough', category: 'Tillage', price: 28000, location: 'Kano, Kano', emoji: '⚙️', badge: 'Great value', color: '#e9e9df', featured: true, description: 'Tillage implement for soil preparation. Check tractor compatibility and transport arrangements before booking.' },
@@ -37,3 +90,9 @@ export const SEED_EQUIPMENT: Equipment[] = [
   { id: 7, ownerId: null, name: 'Power Tiller', category: 'Tillage', price: 32000, location: 'Enugu, Enugu', emoji: '🛠️', badge: 'Small farms', color: '#e4eadb', featured: true, description: 'Compact tillage equipment for suitable small and medium farm plots. Ask about soil suitability and operator support.' },
   { id: 8, ownerId: null, name: 'Seed Drill Machine', category: 'Planting', price: 39000, location: 'Makurdi, Benue', emoji: '🌾', badge: 'Precision planting', color: '#f1ead8', featured: true, description: 'Seed placement equipment for more organised planting. Confirm calibration and crop suitability before use.' },
 ];
+
+export const SEED_EQUIPMENT: Equipment[] = RAW_SEED.map((r) => ({
+  ...EQUIPMENT_DEFAULTS,
+  ...r,
+  state: r.location.split(',')[1]?.trim() ?? '',
+}));
