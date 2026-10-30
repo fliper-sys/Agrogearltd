@@ -1,0 +1,26 @@
+import React from 'react';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider } from '@/context/AuthContext';
+import { MarketProvider } from '@/context/MarketContext';
+import { ToastProvider } from '@/components/Toast';
+import { colors } from '@/lib/theme';
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <MarketProvider>
+          <ToastProvider>
+            <View style={{ flex: 1, backgroundColor: colors.cream }}>
+              <StatusBar style="dark" />
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }} />
+            </View>
+          </ToastProvider>
+        </MarketProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}

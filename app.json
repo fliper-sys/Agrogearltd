@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "AgroGear",
+    "slug": "agrogear",
+    "version": "1.0.0",
+    "scheme": "agrogear",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": ["expo-router"]
+  }
+}
