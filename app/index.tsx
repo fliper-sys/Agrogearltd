@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, LayoutChangeEvent, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { EquipmentCard } from '@/components/EquipmentCard';
 import { EquipmentModal } from '@/components/EquipmentModal';
 import { Footer } from '@/components/Footer';
@@ -8,16 +8,15 @@ import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
 import { ListingForm } from '@/components/ListingForm';
 import { useToast } from '@/components/Toast';
-import { Button, Chip, SelectField, T } from '@/components/ui';
+import { Button, Chip, DateField, Field, SelectField, T, TextField } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useMarket } from '@/context/MarketContext';
-import { ALL_CATEGORIES, CATEGORIES, Equipment } from '@/lib/data';
+import { ALL_CATEGORIES, CATEGORIES, CONDITIONS, Equipment, NIGERIA_STATES } from '@/lib/data';
+import { DEFAULT_FILTERS, Filters, Sort, activeFilterCount, filterEquipment } from '@/lib/search';
+import { todayISO } from '@/lib/format';
 import { colors, useBreakpoint } from '@/lib/theme';
-import { TextInput } from 'react-native';
+import { Pressable, TextInput } from 'react-native';
 import { fontFamily, web } from '@/lib/theme';
-import MapView from '@/components/MapView';
-import type { MapMarker } from '@/lib/mapTypes';
-import { money } from '@/lib/format';
 
 const CATEGORY_NAMES = [ALL_CATEGORIES, ...CATEGORIES];
 const GAP = 19;
@@ -25,17 +24,18 @@ const GAP = 19;
 export default function Home() {
   const { isSm, isMd, columns, width } = useBreakpoint();
   const { user } = useAuth();
-  const { equipment, loading, offline, favourites, toggleFavourite } = useMarket();
+  const { equipment, loading, offline, favourites, bookedRanges, toggleFavourite } = useMarket();
+  const params = useLocalSearchParams<{ list?: string }>();
   const toast = useToast();
   const router = useRouter();
 
-  const [category, setCategory] = useState(ALL_CATEGORIES);
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState('featured');
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+  const patch = (p: Partial<Filters>) => setFilters((f) => ({ ...f, ...p }));
+  const { category, query, sort } = filters;
   const [showingFavourites, setShowingFavourites] = useState(false);
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [gridWidth, setGridWidth] = useState(0);
-  const [view, setView] = useState<'grid' | 'map'>('grid');
 
   const scroller = useRef<any>(null);
   const offsets = useRef<Record<string, number>>({});
@@ -44,25 +44,19 @@ export default function Home() {
     offsets.current[key] = e.nativeEvent.layout.y;
   };
 
-  const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = equipment.filter(
-      (e) =>
-        (category === ALL_CATEGORIES || e.category === category) &&
-        (!showingFavourites || favourites.has(e.id)) &&
-        [e.name, e.category, e.location, e.description].join(' ').toLowerCase().includes(q),
-    );
-    if (sort === 'low') list.sort((a, b) => a.price - b.price);
-    else if (sort === 'high') list.sort((a, b) => b.price - a.price);
-    else list.sort((a, b) => Number(b.featured) - Number(a.featured) || a.id - b.id);
-    return list;
-  }, [equipment, category, query, sort, showingFavourites, favourites]);
+  const items = useMemo(
+    () => filterEquipment(equipment, filters, bookedRanges, showingFavourites ? favourites : undefined),
+    [equipment, filters, bookedRanges, showingFavourites, favourites],
+  );
+  const filterCount = activeFilterCount(filters);
+
+  useEffect(() => {
+    if (params.list) setTimeout(() => scrollTo('list'), 400);
+  }, [params.list]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetFilters = () => {
-    setCategory(ALL_CATEGORIES);
+    setFilters(DEFAULT_FILTERS);
     setShowingFavourites(false);
-    setQuery('');
-    setSort('featured');
   };
 
   const onFavourites = () => {
@@ -72,8 +66,7 @@ export default function Home() {
       return;
     }
     setShowingFavourites((s) => !s);
-    setQuery('');
-    setCategory(ALL_CATEGORIES);
+    setFilters(DEFAULT_FILTERS);
     scrollTo('marketplace');
   };
 
@@ -88,22 +81,6 @@ export default function Home() {
     toast(res.error ?? (had ? 'Removed from favourites.' : 'Added to favourites.'));
   };
 
-  const mapMarkers = useMemo<MapMarker[]>(
-    () =>
-      items
-        .filter((e) => e.latitude != null && e.longitude != null)
-        .map((e) => ({
-          id: `eq-${e.id}`,
-          lat: e.latitude as number,
-          lng: e.longitude as number,
-          emoji: e.emoji,
-          color: e.color,
-          label: `${e.name} · ${money(e.price)}/day · ${e.location}`,
-          onPress: () => setSelected(e),
-        })),
-    [items],
-  );
-
   const cardWidth =
     gridWidth > 0 ? Math.floor((gridWidth - GAP * (columns - 1)) / columns) : `${100 / columns - 2}%`;
 
@@ -112,14 +89,12 @@ export default function Home() {
       <Header
         favouriteCount={favourites.size}
         showingFavourites={showingFavourites}
-        home={{
-          onMarketplace: () => {
-            setShowingFavourites(false);
-            scrollTo('marketplace');
-          },
-          onFavourites,
-          onList: () => scrollTo('list'),
+        onMarketplace={() => {
+          setShowingFavourites(false);
+          scrollTo('marketplace');
         }}
+        onFavourites={onFavourites}
+        onList={() => scrollTo('list')}
       />
 
       <ScrollView ref={scroller} style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
@@ -162,7 +137,7 @@ export default function Home() {
                 <T style={{ fontSize: 16, color: colors.muted }}>⌕</T>
                 <TextInput
                   value={query}
-                  onChangeText={setQuery}
+                  onChangeText={(v) => patch({ query: v })}
                   placeholder="Search tractors, harvesters, locations..."
                   placeholderTextColor="#9aa59c"
                   style={[
@@ -180,10 +155,12 @@ export default function Home() {
               >
                 <SelectField
                   value={sort}
-                  onChange={setSort}
+                  onChange={(v) => patch({ sort: v as Sort })}
                   style={{ border: 'none', padding: 8, background: '#fff' }}
                   options={[
                     { value: 'featured', label: 'Featured first' },
+                    { value: 'newest', label: 'Newest' },
+                    { value: 'rating', label: 'Top rated' },
                     { value: 'low', label: 'Price: low to high' },
                     { value: 'high', label: 'Price: high to low' },
                   ]}
@@ -198,19 +175,58 @@ export default function Home() {
                   label={c}
                   active={category === c}
                   onPress={() => {
-                    setCategory(c);
+                    patch({ category: c });
                     setShowingFavourites(false);
                   }}
                 />
               ))}
+              <Chip label={`⚙ Filters${filterCount ? ` (${filterCount})` : ''}`} active={showFilters} onPress={() => setShowFilters((v) => !v)} />
             </View>
+
+            {showFilters ? (
+              <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: isSm ? 14 : 20, marginBottom: 22, gap: 16 }}>
+                <View style={{ flexDirection: isSm ? 'column' : 'row', gap: 14 }}>
+                  <Field label="State" style={{ flex: 1 }}>
+                    <SelectField value={filters.state} onChange={(v) => patch({ state: v })} placeholder="Anywhere in Nigeria" options={NIGERIA_STATES.map((s) => ({ value: s, label: s }))} />
+                  </Field>
+                  <Field label="Min price / day (₦)" style={{ flex: 1 }}>
+                    <TextField value={filters.minPrice} onChangeText={(v) => patch({ minPrice: v.replace(/[^0-9]/g, '') })} keyboardType="numeric" placeholder="0" />
+                  </Field>
+                  <Field label="Max price / day (₦)" style={{ flex: 1 }}>
+                    <TextField value={filters.maxPrice} onChangeText={(v) => patch({ maxPrice: v.replace(/[^0-9]/g, '') })} keyboardType="numeric" placeholder="Any" />
+                  </Field>
+                </View>
+                <View style={{ flexDirection: isSm ? 'column' : 'row', gap: 14 }}>
+                  <Field label="Available from" style={{ flex: 1 }}>
+                    <DateField value={filters.from} min={todayISO()} onChange={(v) => patch({ from: v, to: filters.to && filters.to < v ? v : filters.to })} />
+                  </Field>
+                  <Field label="Available until" style={{ flex: 1 }}>
+                    <DateField value={filters.to} min={filters.from || todayISO()} onChange={(v) => patch({ to: v })} />
+                  </Field>
+                  <Field label="Condition" style={{ flex: 1 }}>
+                    <SelectField value={filters.condition} onChange={(v) => patch({ condition: v })} placeholder="Any condition" options={CONDITIONS.map((c) => ({ value: c, label: c }))} />
+                  </Field>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
+                  <Chip label="✓ Verified owners" active={filters.verifiedOnly} onPress={() => patch({ verifiedOnly: !filters.verifiedOnly })} />
+                  <Chip label="Delivery available" active={filters.deliveryOnly} onPress={() => patch({ deliveryOnly: !filters.deliveryOnly })} />
+                  <Chip label="Operator included" active={filters.operatorOnly} onPress={() => patch({ operatorOnly: !filters.operatorOnly })} />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <T style={{ color: colors.muted, fontSize: 13 }}>{items.length} machine{items.length === 1 ? '' : 's'} match</T>
+                  <Pressable onPress={resetFilters} style={web({ cursor: 'pointer' })}>
+                    <T style={{ color: colors.green, fontWeight: '700', fontSize: 13 }}>Clear all</T>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
 
             <SectionHead
               title={showingFavourites ? 'Your favourites' : 'Popular equipment'}
               subtitle={
                 showingFavourites
                   ? 'Machines you have saved.'
-                  : 'Rental prices are indicative; contact the owner to confirm availability.'
+                  : `${items.length} machine${items.length === 1 ? '' : 's'} · prices per day, owner approval required`
               }
               action={<Button variant="secondary" label="Reset filters" onPress={resetFilters} />}
             />
@@ -221,29 +237,9 @@ export default function Home() {
               </T>
             ) : null}
 
-            <View style={{ flexDirection: 'row', gap: 9, marginBottom: 16 }}>
-              <Chip label="▦ Grid" active={view === 'grid'} onPress={() => setView('grid')} />
-              <Chip label="🗺 Map" active={view === 'map'} onPress={() => setView('map')} />
-            </View>
-
-            {view === 'map' ? (
-              <View style={{ marginBottom: 8 }}>
-                <MapView
-                  markers={mapMarkers}
-                  height={isSm ? 380 : 480}
-                  fitKey={`${category}|${query}|${mapMarkers.length}`}
-                />
-                <T style={{ fontSize: 12, color: colors.muted, marginTop: 10 }}>
-                  {mapMarkers.length
-                    ? `Showing ${mapMarkers.length} machine${mapMarkers.length === 1 ? '' : 's'} with a pinned location. Tap a pin for details.`
-                    : 'None of these machines have a pinned location yet. Owners can pin a location when listing.'}
-                </T>
-              </View>
-            ) : null}
-
             <View
               onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
-              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: 6, display: view === 'map' ? 'none' : 'flex' }}
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: 6 }}
             >
               {loading ? (
                 <View style={{ width: '100%', padding: 45, alignItems: 'center' }}>

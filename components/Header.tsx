@@ -2,24 +2,27 @@ import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { useProfile } from '@/context/ProfileContext';
+import { useRentals } from '@/context/RentalsContext';
 import { colors, useBreakpoint, web } from '@/lib/theme';
-import { Avatar } from './Avatar';
 import { Brand, Button, T } from './ui';
 
 type Props = {
-  favouriteCount?: number;
-  showingFavourites?: boolean;
-  /** Provided only by the marketplace screen; other screens link back to it. */
-  home?: { onMarketplace: () => void; onFavourites: () => void; onList: () => void };
-  active?: 'stores' | 'messages' | 'admin' | 'profile';
+  favouriteCount: number;
+  showingFavourites: boolean;
+  onMarketplace: () => void;
+  onFavourites: () => void;
+  onList: () => void;
 };
 
 function NavLink({ label, onPress, active }: { label: string; onPress: () => void; active?: boolean }) {
   return (
-    <Pressable accessibilityRole="link" onPress={onPress} style={web({ cursor: 'pointer' })}>
+    <Pressable
+      accessibilityRole="link"
+      onPress={onPress}
+      style={web({ cursor: 'pointer' })}
+    >
       {(s: any) => (
-        <T style={{ fontWeight: active ? '800' : '600', color: active || s.hovered ? colors.green : colors.navText, fontSize: 14 }}>
+        <T style={{ fontWeight: '600', color: active || s.hovered ? colors.green : colors.navText, fontSize: 14 }}>
           {label}
         </T>
       )}
@@ -27,43 +30,36 @@ function NavLink({ label, onPress, active }: { label: string; onPress: () => voi
   );
 }
 
-export function Header({ favouriteCount = 0, showingFavourites, home, active }: Props) {
-  const { width, isSm } = useBreakpoint();
-  const compact = width <= 1100;
+export function Header({ favouriteCount, showingFavourites, onMarketplace, onFavourites, onList }: Props) {
+  const { isSm, isMd } = useBreakpoint();
   const { user, displayName, signOut } = useAuth();
-  const { profile, isAdmin } = useProfile();
   const router = useRouter();
+  const { actionNeeded, unread } = useRentals();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const badge = Math.max(actionNeeded, unread);
+  const rentLabel = `My rentals${badge ? ` (${badge})` : ''}`;
+  const favLabel = `♥ Favourites${favouriteCount ? ` (${favouriteCount})` : ''}`;
   const go = (fn: () => void) => () => {
     setMenuOpen(false);
     fn();
   };
-  const toMarketplace = home?.onMarketplace ?? (() => router.push('/'));
-  const favLabel = `♥ Favourites${favouriteCount ? ` (${favouriteCount})` : ''}`;
 
-  const links: { label: string; onPress: () => void; active?: boolean }[] = [
-    { label: 'Marketplace', onPress: toMarketplace },
-    ...(home ? [{ label: favLabel, onPress: home.onFavourites, active: showingFavourites }] : []),
-    ...(home ? [{ label: 'List equipment', onPress: home.onList }] : []),
-    { label: '🏪 Agro stores', onPress: () => router.push('/stores'), active: active === 'stores' },
-    { label: '💬 Messages', onPress: () => router.push('/messages'), active: active === 'messages' },
-    ...(isAdmin ? [{ label: '🛡 Admin', onPress: () => router.push('/admin'), active: active === 'admin' }] : []),
-  ];
-
-  const accountControl = user ? (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel="Your profile"
-        onPress={go(() => router.push('/profile'))}
-        style={[{ flexDirection: 'row', alignItems: 'center', gap: 8 }, web({ cursor: 'pointer' })]}
+  const authControl = user ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 17,
+          backgroundColor: colors.mint,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
-        <Avatar url={profile?.avatar_url} name={displayName} size={34} />
-        {menuOpen || !compact ? (
-          <T style={{ fontSize: 14, fontWeight: active === 'profile' ? '800' : '600', color: colors.navText }}>Profile</T>
-        ) : null}
-      </Pressable>
+        <T style={{ color: colors.green, fontWeight: '800', fontSize: 14 }}>{displayName.charAt(0).toUpperCase()}</T>
+      </View>
+      <NavLink label="Profile" onPress={go(() => router.push('/profile'))} />
       <NavLink label="Sign out" onPress={go(() => signOut())} />
     </View>
   ) : (
@@ -73,7 +69,12 @@ export function Header({ favouriteCount = 0, showingFavourites, home, active }: 
   return (
     <View
       style={[
-        { backgroundColor: 'rgba(255,255,255,0.92)', borderBottomWidth: 1, borderBottomColor: colors.line, zIndex: 10 },
+        {
+          backgroundColor: 'rgba(255,255,255,0.92)',
+          borderBottomWidth: 1,
+          borderBottomColor: colors.line,
+          zIndex: 10,
+        },
         web({ backdropFilter: 'blur(8px)' }),
       ]}
     >
@@ -86,13 +87,13 @@ export function Header({ favouriteCount = 0, showingFavourites, home, active }: 
           paddingHorizontal: isSm ? 16 : '6%',
         }}
       >
-        <Pressable onPress={toMarketplace} accessibilityRole="link" style={web({ cursor: 'pointer' })}>
+        <Pressable onPress={onMarketplace} accessibilityRole="link" style={web({ cursor: 'pointer' })}>
           <Brand size={isSm ? 20 : 23} />
         </Pressable>
 
-        {compact ? (
+        {isMd ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            {!isSm ? <Button label="Find equipment ↗" onPress={toMarketplace} /> : null}
+            <Button label="Find equipment ↗" small={isSm} onPress={onMarketplace} />
             <Pressable
               accessibilityLabel="Menu"
               accessibilityRole="button"
@@ -115,31 +116,33 @@ export function Header({ favouriteCount = 0, showingFavourites, home, active }: 
             </Pressable>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22 }}>
-            {links.map((l) => (
-              <NavLink key={l.label} label={l.label} onPress={l.onPress} active={l.active} />
-            ))}
-            {accountControl}
-            <Button label="Find equipment ↗" onPress={toMarketplace} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 27 }}>
+            <NavLink label="Marketplace" onPress={onMarketplace} />
+            <NavLink label={favLabel} onPress={onFavourites} active={showingFavourites} />
+            <NavLink label="List equipment" onPress={onList} />
+            {user ? <NavLink label={rentLabel} onPress={() => router.push('/rentals')} /> : null}
+            {authControl}
+            <Button label="Find equipment ↗" onPress={onMarketplace} />
           </View>
         )}
       </View>
 
-      {compact && menuOpen ? (
+      {isMd && menuOpen ? (
         <View
           style={{
             paddingHorizontal: isSm ? 16 : '6%',
             paddingBottom: 16,
-            paddingTop: 16,
             gap: 16,
             borderTopWidth: 1,
             borderTopColor: colors.line,
+            paddingTop: 16,
           }}
         >
-          {links.map((l) => (
-            <NavLink key={l.label} label={l.label} onPress={go(l.onPress)} active={l.active} />
-          ))}
-          {accountControl}
+          <NavLink label="Marketplace" onPress={go(onMarketplace)} />
+          <NavLink label={favLabel} onPress={go(onFavourites)} active={showingFavourites} />
+          <NavLink label="List equipment" onPress={go(onList)} />
+          {user ? <NavLink label={rentLabel} onPress={go(() => router.push('/rentals'))} /> : null}
+          {authControl}
         </View>
       ) : null}
     </View>

@@ -1,146 +1,74 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { AdminBookings, AdminListings, AdminStores, AdminUsers } from '@/components/admin/Panels';
-import { Header } from '@/components/Header';
-import { Button, Chip, Eyebrow, T } from '@/components/ui';
+import { Card, PageShell } from '@/components/PageShell';
+import { useToast } from '@/components/Toast';
+import { Button, ErrorText, T, TextField } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
-import { useProfile } from '@/context/ProfileContext';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { colors, useBreakpoint } from '@/lib/theme';
+import { ID_TYPES } from '@/lib/data';
+import { supabase } from '@/lib/supabase';
+import { colors } from '@/lib/theme';
 
-type Tab = 'overview' | 'users' | 'listings' | 'bookings' | 'stores';
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'overview', label: '📊 Overview' },
-  { key: 'users', label: '👥 Users' },
-  { key: 'listings', label: '🚜 Listings' },
-  { key: 'bookings', label: '📅 Bookings' },
-  { key: 'stores', label: '🏪 Stores' },
-];
+type Pending = { id: string; full_name: string; phone: string; state: string; id_type: string; id_number_last4: string; id_doc_path: string };
 
-async function count(table: string, filter?: (q: any) => any) {
-  let q: any = supabase.from(table).select('*', { count: 'exact', head: true });
-  if (filter) q = filter(q);
-  const { count: c } = await q;
-  return c ?? 0;
-}
-
-export default function AdminScreen() {
-  const { isSm } = useBreakpoint();
+export default function Admin() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: profileLoading, profile } = useProfile();
-  const [tab, setTab] = useState<Tab>('overview');
-  const [stats, setStats] = useState<Record<string, number> | null>(null);
+  const toast = useToast();
+  const { user, loading, profile } = useAuth();
+  const [rows, setRows] = useState<Pending[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
 
-  const loadStats = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
-    const [users, admins, suspended, listings, hidden, bookings, pending, stores, unverified, chats] = await Promise.all([
-      count('profiles'),
-      count('profiles', (q) => q.eq('role', 'admin')),
-      count('profiles', (q) => q.eq('status', 'suspended')),
-      count('equipment'),
-      count('equipment', (q) => q.eq('hidden', true)),
-      count('bookings'),
-      count('bookings', (q) => q.eq('status', 'pending')),
-      count('stores'),
-      count('stores', (q) => q.eq('verified', false)),
-      count('conversations'),
-    ]);
-    setStats({ users, admins, suspended, listings, hidden, bookings, pending, stores, unverified, chats });
+  const load = useCallback(async () => {
+    const { data, error: e } = await supabase.from('profiles').select('*').eq('verification_status', 'pending').order('updated_at');
+    if (e) setError(e.message);
+    else setRows((data ?? []) as Pending[]);
   }, []);
 
   useEffect(() => {
-    if (isAdmin) loadStats();
-  }, [isAdmin, loadStats, tab]);
+    if (!loading && (!user || (profile && !profile.isAdmin))) router.replace('/');
+    else if (profile?.isAdmin) load();
+  }, [loading, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!authLoading && !user) router.replace('/auth');
-  }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openDoc = async (path: string) => {
+    const { data, error: e } = await supabase.storage.from('verification-docs').createSignedUrl(path, 120);
+    if (e || !data) return setError(e?.message ?? 'Could not open the document.');
+    window.open(data.signedUrl, '_blank');
+  };
 
-  const tiles = useMemo(
-    () =>
-      stats
-        ? [
-            { emoji: '👥', label: 'Users', value: stats.users, note: `${stats.admins} admin · ${stats.suspended} restricted` },
-            { emoji: '🚜', label: 'Listings', value: stats.listings, note: `${stats.hidden} hidden` },
-            { emoji: '📅', label: 'Booking requests', value: stats.bookings, note: `${stats.pending} pending` },
-            { emoji: '🏪', label: 'Agro stores', value: stats.stores, note: `${stats.unverified} unverified` },
-            { emoji: '💬', label: 'Conversations', value: stats.chats, note: 'Message contents are private' },
-          ]
-        : [],
-    [stats],
-  );
-
-  if (authLoading || profileLoading || (user && !profile)) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.cream }}>
-        <Header active="admin" />
-        <ActivityIndicator color={colors.green} style={{ marginTop: 60 }} />
-      </View>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.cream }}>
-        <Header active="admin" />
-        <View style={{ padding: 28, alignItems: 'flex-start', gap: 14, maxWidth: 560, alignSelf: 'center', width: '100%' }}>
-          <T style={{ fontSize: 28, fontWeight: '800', letterSpacing: -1 }}>Admins only</T>
-          <T style={{ color: colors.muted, lineHeight: 24 }}>You do not have access to the admin dashboard.</T>
-          <Button label="Back to marketplace" onPress={() => router.replace('/')} />
-        </View>
-      </View>
-    );
-  }
+  const decide = async (id: string, approve: boolean) => {
+    setBusy(id);
+    setError(null);
+    const { error: e } = await supabase.rpc('review_verification', { p_user: id, p_approve: approve, p_reason: reasons[id] ?? null });
+    setBusy(null);
+    if (e) return setError(e.message);
+    toast(approve ? 'Approved.' : 'Rejected.');
+    load();
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.cream }}>
-      <Header active="admin" />
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <View style={{ width: '100%', maxWidth: 1100, alignSelf: 'center', padding: isSm ? 14 : 28, paddingBottom: 70 }}>
-          <Eyebrow color={colors.green}>Admin</Eyebrow>
-          <T style={{ fontSize: isSm ? 28 : 36, fontWeight: '800', letterSpacing: -1.5, marginTop: 10 }}>Dashboard</T>
-
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginVertical: 22 }}>
-            {TABS.map((t) => (
-              <Chip key={t.key} label={t.label} active={tab === t.key} onPress={() => setTab(t.key)} />
-            ))}
-          </View>
-
-          {tab === 'overview' ? (
-            stats ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-                {tiles.map((t) => (
-                  <View
-                    key={t.label}
-                    style={{
-                      flexGrow: 1,
-                      flexBasis: isSm ? '45%' : 200,
-                      backgroundColor: '#fff',
-                      borderWidth: 1,
-                      borderColor: colors.line,
-                      borderRadius: 18,
-                      padding: 20,
-                    }}
-                  >
-                    <T style={{ fontSize: 28 }}>{t.emoji}</T>
-                    <T style={{ fontSize: 30, fontWeight: '800', color: colors.green, marginTop: 6 }}>{t.value}</T>
-                    <T style={{ fontWeight: '700', marginTop: 2 }}>{t.label}</T>
-                    <T style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>{t.note}</T>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <ActivityIndicator color={colors.green} />
-            )
-          ) : null}
-          {tab === 'users' ? <AdminUsers /> : null}
-          {tab === 'listings' ? <AdminListings /> : null}
-          {tab === 'bookings' ? <AdminBookings /> : null}
-          {tab === 'stores' ? <AdminStores /> : null}
-        </View>
-      </ScrollView>
-    </View>
+    <PageShell title="Verification queue" subtitle="Check that the ID matches the name on the profile, then approve or reject.">
+      <ErrorText>{error}</ErrorText>
+      {rows.length === 0 ? (
+        <Card><T style={{ color: colors.muted }}>Nothing waiting for review. 🎉</T></Card>
+      ) : (
+        rows.map((r) => (
+          <Card key={r.id}>
+            <T style={{ fontSize: 18, fontWeight: '800' }}>{r.full_name}</T>
+            <T style={{ color: colors.muted, marginTop: 4 }}>{r.phone} · {r.state}</T>
+            <T style={{ marginTop: 8 }}>{ID_TYPES.find((t) => t.value === r.id_type)?.label ?? r.id_type} · ends {r.id_number_last4}</T>
+            <Button variant="secondary" small label="View document ↗" onPress={() => openDoc(r.id_doc_path)} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
+            <View style={{ marginTop: 14 }}>
+              <TextField value={reasons[r.id] ?? ''} onChangeText={(v) => setReasons((p) => ({ ...p, [r.id]: v }))} placeholder="Reason (shown to the user if you reject)" />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <Button label="Approve" onPress={() => decide(r.id, true)} loading={busy === r.id} />
+              <Button variant="secondary" label="Reject" onPress={() => decide(r.id, false)} disabled={busy === r.id} />
+            </View>
+          </Card>
+        ))
+      )}
+    </PageShell>
   );
 }

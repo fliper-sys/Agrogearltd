@@ -1,152 +1,276 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Avatar } from '@/components/Avatar';
-import { Footer } from '@/components/Footer';
-import { Header } from '@/components/Header';
+import { VerifiedBadge } from '@/components/Badges';
+import { Card, PageShell } from '@/components/PageShell';
 import { useToast } from '@/components/Toast';
-import { Button, ErrorText, Eyebrow, Field, Notice, T, TextField } from '@/components/ui';
-import { useAuth } from '@/context/AuthContext';
-import { useProfile } from '@/context/ProfileContext';
-import { colors, useBreakpoint } from '@/lib/theme';
+import { Button, Chip, ErrorText, Field, Notice, SelectField, T, TextField } from '@/components/ui';
+import { profileComplete, useAuth } from '@/context/AuthContext';
+import { useMarket } from '@/context/MarketContext';
+import { ID_TYPES, NIGERIA_STATES } from '@/lib/data';
+import { pickFiles, uploadFile } from '@/lib/files';
+import { colors, useBreakpoint, web } from '@/lib/theme';
+import { formatDate } from '@/lib/time';
+
+const STATE_OPTIONS = NIGERIA_STATES.map((s) => ({ value: s, label: s }));
+
+function Toggle({ label, hint, value, onChange }: { label: string; hint: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      onPress={() => onChange(!value)}
+      style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, paddingVertical: 10 }, web({ cursor: 'pointer' })]}
+    >
+      <View style={{ flex: 1 }}>
+        <T style={{ fontWeight: '700', fontSize: 14 }}>{label}</T>
+        <T style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{hint}</T>
+      </View>
+      <View style={{ width: 46, height: 26, borderRadius: 13, backgroundColor: value ? colors.green : '#cfd6cb', padding: 3, alignItems: value ? 'flex-end' : 'flex-start' }}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
+      </View>
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
   const { isSm } = useBreakpoint();
   const router = useRouter();
   const toast = useToast();
-  const { user, loading: authLoading, signOut, updatePassword } = useAuth();
-  const { profile, isAdmin, updateProfile, changeAvatar, removeAvatar } = useProfile();
+  const { user, loading, profile, displayName, updateProfile, submitVerification, resetPassword, signOut } = useAuth();
+  const { equipment, deleteListing } = useMarket();
 
-  const [name, setName] = useState('');
-  const [city, setCity] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [state, setState] = useState('');
+  const [farmName, setFarmName] = useState('');
+  const [address, setAddress] = useState('');
   const [bio, setBio] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
+  const [rolePref, setRolePref] = useState<'renter' | 'owner' | 'both'>('both');
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifySms, setNotifySms] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
-  const [pwBusy, setPwBusy] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
+  const [idType, setIdType] = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [docPath, setDocPath] = useState('');
+  const [docName, setDocName] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) router.replace('/auth');
-  }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!loading && !user) router.replace('/auth');
+  }, [loading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (profile) {
-      setName(profile.full_name ?? '');
-      setCity(profile.city ?? '');
-      setBio(profile.bio ?? '');
-    }
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!profile) return;
+    setFullName(profile.fullName);
+    setPhone(profile.phone);
+    setState(profile.state);
+    setFarmName(profile.farmName);
+    setAddress(profile.address);
+    setBio(profile.bio);
+    setRolePref(profile.rolePref);
+    setNotifyEmail(profile.notifyEmail);
+    setNotifySms(profile.notifySms);
+  }, [profile]);
+
+  const status = profile?.verificationStatus ?? 'unverified';
+  const mine = equipment.filter((e) => user && e.ownerId === user.id);
+  const row = { flexDirection: isSm ? 'column' : 'row', gap: 16 } as const;
 
   const save = async () => {
     setError(null);
-    if (!name.trim()) return setError('Your name cannot be empty.');
-    setBusy(true);
-    const res = await updateProfile({ full_name: name, city, bio });
-    setBusy(false);
+    if (fullName.trim().length < 2) return setError('Enter your full name.');
+    if (phone.trim().length < 7) return setError('Enter a valid phone number.');
+    if (!state) return setError('Choose your state.');
+    setSaving(true);
+    const res = await updateProfile({ fullName, phone, state, farmName, address, bio, rolePref, notifyEmail, notifySms });
+    setSaving(false);
     if (res.error) return setError(res.error);
     toast('Profile saved.');
   };
 
-  const photo = async () => {
-    setError(null);
-    setPhotoBusy(true);
-    const res = await changeAvatar();
-    setPhotoBusy(false);
-    if (res.error) setError(res.error);
-    else if (!res.cancelled) toast('Profile photo updated.');
+  const chooseDoc = async () => {
+    setVerifyError(null);
+    if (!user) return;
+    const [file] = await pickFiles({ accept: 'image/png,image/jpeg,image/webp,application/pdf' });
+    if (!file) return;
+    setUploading(true);
+    const res = await uploadFile('verification-docs', user.id, file);
+    setUploading(false);
+    if (res.error) return setVerifyError(res.error);
+    setDocPath(res.path ?? '');
+    setDocName(file.name);
   };
 
-  const removePhoto = async () => {
-    setPhotoBusy(true);
-    const res = await removeAvatar();
-    setPhotoBusy(false);
-    if (res.error) setError(res.error);
-    else toast('Profile photo removed.');
+  const verify = async () => {
+    setVerifyError(null);
+    if (!profileComplete(profile)) return setVerifyError('Save your name, phone number and state above first.');
+    if (!idType) return setVerifyError('Choose an ID type.');
+    if (idNumber.trim().length < 6) return setVerifyError('Enter your full ID number.');
+    if (!docPath) return setVerifyError('Upload a clear photo or PDF of your ID.');
+    setVerifying(true);
+    const res = await submitVerification(idType, idNumber.trim(), docPath);
+    setVerifying(false);
+    if (res.error) return setVerifyError(res.error);
+    setIdNumber('');
+    setDocPath('');
+    setDocName('');
+    toast('Submitted. We usually review within 1–2 working days.');
   };
 
-  const changePassword = async () => {
-    setPwError(null);
-    if (pw.length < 6) return setPwError('Password must be at least 6 characters.');
-    if (pw !== pw2) return setPwError('Passwords do not match.');
-    setPwBusy(true);
-    const res = await updatePassword(pw);
-    setPwBusy(false);
-    if (res.error) return setPwError(res.error);
-    setPw('');
-    setPw2('');
-    toast('Password updated.');
+  const sendReset = async () => {
+    if (!user?.email) return;
+    const res = await resetPassword(user.email);
+    toast(res.error ?? 'Password reset link sent to your email.');
   };
 
-  const card = { backgroundColor: '#fff', borderRadius: 22, borderWidth: 1, borderColor: colors.line, padding: isSm ? 19 : 27 } as const;
+  const idLabel = ID_TYPES.find((t) => t.value === profile?.idType)?.label;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.cream }}>
-      <Header active="profile" />
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <View style={{ width: '100%', maxWidth: 760, alignSelf: 'center', padding: isSm ? 14 : 28, paddingBottom: 60, gap: 20 }}>
-          <View>
-            <Eyebrow color={colors.green}>Your account</Eyebrow>
-            <T style={{ fontSize: isSm ? 28 : 36, fontWeight: '800', letterSpacing: -1.5, marginTop: 10 }}>Profile</T>
+    <PageShell title="Profile & settings" subtitle="Keep your details accurate. Verified profiles earn more trust and more bookings.">
+      <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }}>
+            <T style={{ fontSize: 24, fontWeight: '800', color: colors.green }}>{displayName.charAt(0).toUpperCase()}</T>
           </View>
+          <View style={{ flex: 1, gap: 6 }}>
+            <T style={{ fontSize: 20, fontWeight: '800' }}>{displayName || 'Your account'}</T>
+            <T style={{ color: colors.muted, fontSize: 13 }}>{user?.email}</T>
+            {status === 'verified' ? <VerifiedBadge /> : null}
+          </View>
+        </View>
+      </Card>
 
-          <View style={card}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-              <Avatar url={profile?.avatar_url} name={name || user?.email} size={84} />
-              <View style={{ gap: 10, flexShrink: 1 }}>
-                <T style={{ fontWeight: '800', fontSize: 18 }}>{profile?.full_name || user?.email}</T>
-                <T style={{ color: colors.muted, fontSize: 13 }}>{user?.email}</T>
-                <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-                  <Button small variant="secondary" label="📷 Upload photo" onPress={photo} loading={photoBusy} />
-                  {profile?.avatar_url ? <Button small variant="secondary" label="Remove" onPress={removePhoto} disabled={photoBusy} /> : null}
-                </View>
-              </View>
+      <Card>
+        <T style={{ fontSize: 18, fontWeight: '800', marginBottom: 16 }}>Personal details</T>
+        <View style={{ gap: 16 }}>
+          <View style={row}>
+            <Field label="Full name *" style={{ flex: 1 }}>
+              <TextField value={fullName} onChangeText={setFullName} placeholder="As shown on your ID" autoComplete="name" />
+            </Field>
+            <Field label="Phone number *" style={{ flex: 1 }}>
+              <TextField value={phone} onChangeText={setPhone} placeholder="e.g. 0803 000 0000" keyboardType="phone-pad" autoComplete="tel" />
+            </Field>
+          </View>
+          <View style={row}>
+            <Field label="State *" style={{ flex: 1 }}>
+              <SelectField value={state} onChange={setState} placeholder="Choose state" options={STATE_OPTIONS} />
+            </Field>
+            <Field label="Farm or business name" style={{ flex: 1 }}>
+              <TextField value={farmName} onChangeText={setFarmName} placeholder="Optional" />
+            </Field>
+          </View>
+          <Field label="Address">
+            <TextField value={address} onChangeText={setAddress} placeholder="Street, town, LGA" />
+          </Field>
+          <Field label="About you">
+            <TextField value={bio} onChangeText={setBio} multiline placeholder="What do you farm or what machinery do you own?" />
+          </Field>
+          <Field label="I mainly want to">
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <Chip label="Rent equipment" active={rolePref === 'renter'} onPress={() => setRolePref('renter')} />
+              <Chip label="List my equipment" active={rolePref === 'owner'} onPress={() => setRolePref('owner')} />
+              <Chip label="Both" active={rolePref === 'both'} onPress={() => setRolePref('both')} />
             </View>
-            <Notice>JPG, PNG or WebP. Photos are resized automatically and shown on your messages and listings.</Notice>
-            {isAdmin ? (
-              <Button label="🛡 Open admin dashboard" onPress={() => router.push('/admin')} style={{ marginTop: 16, alignSelf: 'flex-start' }} />
-            ) : null}
-          </View>
+          </Field>
+        </View>
+        <ErrorText>{error}</ErrorText>
+        <Button label="Save changes" onPress={save} loading={saving} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
+      </Card>
 
-          <View style={card}>
-            <T style={{ fontSize: 18, fontWeight: '800', marginBottom: 16 }}>Your details</T>
-            <View style={{ gap: 16 }}>
-              <View style={{ flexDirection: isSm ? 'column' : 'row', gap: 16 }}>
-                <Field label="Full name *" style={{ flex: 1 }}>
-                  <TextField value={name} onChangeText={setName} placeholder="Your full name" />
-                </Field>
-                <Field label="City" style={{ flex: 1 }}>
-                  <TextField value={city} onChangeText={setCity} placeholder="e.g. Jos" />
-                </Field>
-              </View>
-              <Field label="About you">
-                <TextField value={bio} onChangeText={setBio} multiline placeholder="Your farm, the equipment you own, what you are looking for..." />
-              </Field>
-            </View>
-            <ErrorText>{error}</ErrorText>
-            <Button label="Save changes" onPress={save} loading={busy} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
-          </View>
+      <Card>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <T style={{ fontSize: 18, fontWeight: '800' }}>Identity verification</T>
+          {status === 'verified' ? <VerifiedBadge /> : null}
+        </View>
 
-          <View style={card}>
-            <T style={{ fontSize: 18, fontWeight: '800', marginBottom: 6 }}>Password</T>
-            <T style={{ color: colors.muted, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
-              If you signed in with Google you can set a password here to also sign in with email.
+        {status === 'verified' ? (
+          <View style={{ marginTop: 12 }}>
+            <T style={{ lineHeight: 22 }}>
+              Your identity was verified{profile?.verifiedAt ? ` on ${formatDate(profile.verifiedAt)}` : ''}
+              {idLabel ? ` using ${idLabel}` : ''}{profile?.idNumberLast4 ? ` (ending ${profile.idNumberLast4})` : ''}. A verified badge shows on your listings.
             </T>
-            <View style={{ flexDirection: isSm ? 'column' : 'row', gap: 16 }}>
-              <Field label="New password" style={{ flex: 1 }}>
-                <TextField value={pw} onChangeText={setPw} secureTextEntry placeholder="At least 6 characters" autoComplete="new-password" />
-              </Field>
-              <Field label="Confirm password" style={{ flex: 1 }}>
-                <TextField value={pw2} onChangeText={setPw2} secureTextEntry placeholder="Repeat password" autoComplete="new-password" />
+            <Notice>Changing your name or phone number does not remove verification, but support may re-check it.</Notice>
+          </View>
+        ) : status === 'pending' ? (
+          <View style={{ backgroundColor: '#fdf3d9', borderRadius: 12, padding: 14, marginTop: 12 }}>
+            <T style={{ color: '#8a6414', fontWeight: '700' }}>Under review</T>
+            <T style={{ color: '#8a6414', marginTop: 4, lineHeight: 21, fontSize: 13 }}>We received your {idLabel ?? 'ID'}. Reviews usually take 1–2 working days and you will be notified.</T>
+          </View>
+        ) : (
+          <View style={{ marginTop: 12 }}>
+            {status === 'rejected' ? (
+              <View style={{ backgroundColor: colors.errorBg, borderRadius: 12, padding: 14, marginBottom: 14 }}>
+                <T style={{ color: colors.error, fontWeight: '700' }}>Verification was not approved</T>
+                <T style={{ color: colors.error, marginTop: 4, fontSize: 13, lineHeight: 20 }}>{profile?.rejectionReason ?? 'Please resubmit a clearer document.'}</T>
+              </View>
+            ) : null}
+            <T style={{ color: colors.muted, lineHeight: 22, marginBottom: 16 }}>
+              Verified owners and renters get a badge, rank higher in search and close deals faster. We store your ID photo privately and only the last 4 characters of the number.
+            </T>
+            <View style={{ gap: 16 }}>
+              <View style={row}>
+                <Field label="ID type *" style={{ flex: 1 }}>
+                  <SelectField value={idType} onChange={setIdType} placeholder="Choose ID" options={ID_TYPES} />
+                </Field>
+                <Field label="ID number *" style={{ flex: 1 }}>
+                  <TextField value={idNumber} onChangeText={setIdNumber} placeholder="Enter the number on your ID" autoCapitalize="characters" />
+                </Field>
+              </View>
+              <Field label="ID photo or PDF *">
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <Button variant="secondary" small label={uploading ? 'Uploading…' : docName ? 'Replace file' : 'Upload file'} onPress={chooseDoc} loading={uploading} />
+                  {docName ? <T style={{ fontSize: 13, color: colors.available }}>✓ {docName}</T> : <T style={{ fontSize: 12, color: colors.muted }}>JPG, PNG or PDF, max 5 MB</T>}
+                </View>
               </Field>
             </View>
-            <ErrorText>{pwError}</ErrorText>
-            <Button variant="secondary" label="Update password" onPress={changePassword} loading={pwBusy} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
+            <ErrorText>{verifyError}</ErrorText>
+            <Button label="Submit for verification →" onPress={verify} loading={verifying} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
           </View>
+        )}
+      </Card>
 
+      <Card>
+        <T style={{ fontSize: 18, fontWeight: '800', marginBottom: 6 }}>Notifications</T>
+        <Toggle label="Email updates" hint="Booking approvals, payments and delivery updates." value={notifyEmail} onChange={setNotifyEmail} />
+        <Toggle label="SMS alerts" hint="Time-sensitive alerts like rental countdown reminders." value={notifySms} onChange={setNotifySms} />
+        <Notice>Save changes above to apply. In-app updates always appear under My rentals.</Notice>
+      </Card>
+
+      <Card>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <T style={{ fontSize: 18, fontWeight: '800' }}>My listings ({mine.length})</T>
+          <Button small variant="secondary" label="+ New listing" onPress={() => router.replace('/?list=1')} />
+        </View>
+        {mine.length === 0 ? (
+          <T style={{ color: colors.muted, marginTop: 8 }}>You have not listed any equipment yet.</T>
+        ) : (
+          mine.map((m) => (
+            <View key={m.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.line, marginTop: 8 }}>
+              <T style={{ flex: 1, fontWeight: '700' }}>{m.emoji} {m.name}</T>
+              <Button
+                small
+                variant="secondary"
+                label="Remove"
+                onPress={async () => {
+                  const res = await deleteListing(m.id);
+                  toast(res.error ?? 'Listing removed.');
+                }}
+              />
+            </View>
+          ))
+        )}
+      </Card>
+
+      <Card>
+        <T style={{ fontSize: 18, fontWeight: '800', marginBottom: 12 }}>Account</T>
+        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+          {profile?.isAdmin ? <Button variant="secondary" label="Admin: verification queue" onPress={() => router.push('/admin')} /> : null}
+          <Button variant="secondary" label="Send password reset link" onPress={sendReset} />
           <Button
             variant="secondary"
             label="Sign out"
@@ -154,11 +278,9 @@ export default function ProfileScreen() {
               await signOut();
               router.replace('/');
             }}
-            style={{ alignSelf: 'flex-start' }}
           />
         </View>
-        <Footer />
-      </ScrollView>
-    </View>
+      </Card>
+    </PageShell>
   );
 }

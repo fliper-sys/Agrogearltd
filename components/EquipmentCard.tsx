@@ -1,8 +1,9 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { Equipment } from '@/lib/data';
 import { money } from '@/lib/format';
 import { colors, emojiShadow, useBreakpoint, web } from '@/lib/theme';
+import { Stars, VerifiedBadge } from './Badges';
 import { Button, T } from './ui';
 
 export function EquipmentCard({
@@ -58,9 +59,13 @@ export function EquipmentCard({
         >
           <T style={{ fontSize: 10, fontWeight: '800' }}>{item.badge || item.category}</T>
         </View>
-        <Text style={[{ fontSize: 92, lineHeight: 110 }, emojiShadow(9, 5, 'rgba(35,60,37,0.11)')]}>
-          {item.emoji || '🚜'}
-        </Text>
+        {item.images[0] ? (
+          <Image source={{ uri: item.images[0] }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} resizeMode="cover" />
+        ) : (
+          <Text style={[{ fontSize: 92, lineHeight: 110 }, emojiShadow(9, 5, 'rgba(35,60,37,0.11)')]}>
+            {item.emoji || '🚜'}
+          </Text>
+        )}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={saved ? 'Remove from favourites' : 'Add to favourites'}
@@ -89,9 +94,18 @@ export function EquipmentCard({
 
       <View style={{ padding: 18 }}>
         <T style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.3 }}>{item.name}</T>
-        <T style={{ fontSize: 12, color: colors.muted, marginTop: 8, marginBottom: 15 }}>
+        <T style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
           ⌖ {item.location} · {item.category}
         </T>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, marginBottom: 12 }}>
+          {item.ownerVerified ? <VerifiedBadge small /> : null}
+          <Stars rating={item.avgRating} count={item.reviewCount} />
+        </View>
+        {item.deliveryAvailable || item.withOperator || item.condition ? (
+          <T style={{ fontSize: 11, color: colors.muted, marginBottom: 12 }}>
+            {[item.condition, item.deliveryAvailable ? 'Delivery' : null, item.withOperator ? 'Operator' : null].filter(Boolean).join(' · ')}
+          </T>
+        ) : null}
         <T style={{ fontSize: 21, fontWeight: '800', color: colors.green }}>
           {money(item.price)} <T style={{ fontSize: 11, color: colors.muted, fontWeight: '500' }}>/ day</T>
         </T>

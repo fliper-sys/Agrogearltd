@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
-import { BookingResult, useMarket } from '@/context/MarketContext';
+import { profileComplete, useAuth } from '@/context/AuthContext';
+import { useMarket } from '@/context/MarketContext';
+import { useRentals } from '@/context/RentalsContext';
 import { Equipment } from '@/lib/data';
 import { money, todayISO } from '@/lib/format';
-import { supabase } from '@/lib/supabase';
+import { quote } from '@/lib/pricing';
+import { overlaps } from '@/lib/search';
+import { formatDate } from '@/lib/time';
 import { colors, emojiShadow, useBreakpoint, web } from '@/lib/theme';
 import { useToast } from './Toast';
-import { Button, DateField, Eyebrow, ErrorText, Field, Notice, T, TextField } from './ui';
+import { Stars, VerifiedBadge } from './Badges';
+import { Button, Chip, DateField, Eyebrow, ErrorText, Field, Notice, T, TextField } from './ui';
 
 export function EquipmentModal({ item, onClose }: { item: Equipment | null; onClose: () => void }) {
   const { isSm } = useBreakpoint();
-  const { user, displayName } = useAuth();
-  const { createBooking, deleteListing } = useMarket();
+  const { user, displayName, profile } = useAuth();
+  const { deleteListing, bookedRanges } = useMarket();
+  const { createBooking } = useRentals();
   const router = useRouter();
   const toast = useToast();
 
@@ -24,17 +29,23 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<BookingResult | null>(null);
+  const [done, setDone] = useState(false);
+  const [fulfilment, setFulfilment] = useState<'pickup' | 'delivery'>('pickup');
+  const [address, setAddress] = useState('');
+  const [photo, setPhoto] = useState(0);
 
   // Reset the form each time a different machine is opened.
   useEffect(() => {
-    setName(displayName);
-    setPhone('');
+    setName(profile?.fullName || displayName);
+    setPhone(profile?.phone ?? '');
+    setFulfilment(item?.pickupAvailable === false ? 'delivery' : 'pickup');
+    setAddress(profile?.address ?? '');
+    setPhoto(0);
     setStart('');
     setEnd('');
     setNote('');
     setError(null);
-    setDone(null);
+    setDone(false);
     setBusy(false);
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -50,44 +61,24 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
 
   const today = todayISO();
   const isOwner = Boolean(user && item.ownerId === user.id);
+  const q = quote(item, start, end, fulfilment);
+  const itemRanges = bookedRanges.filter((r) => r.equipmentId === item.id);
+  const clash = Boolean(start && end && itemRanges.some((r) => overlaps(r.start, r.end, start, end)));
+  const needsProfile = Boolean(user && profile && !profileComplete(profile));
 
   const submit = async () => {
     setError(null);
     if (!name.trim() || !phone.trim() || !start || !end) return setError('Please complete all required fields.');
     if (end < start) return setError('End date must be on or after the start date.');
+    if (!q) return setError('Choose valid dates.');
+    if (q.days < item.minDays) return setError(`Minimum rental for this machine is ${item.minDays} day${item.minDays === 1 ? '' : 's'}.`);
+    if (clash) return setError('Those dates are already booked. Pick different dates.');
+    if (fulfilment === 'delivery' && address.trim().length < 5) return setError('Enter a delivery address.');
     setBusy(true);
-    const res = await createBooking(item, { name: name.trim(), phone: phone.trim(), start, end, note: note.trim() });
+    const res = await createBooking(item.id, { name: name.trim(), phone: phone.trim(), start, end, note: note.trim(), fulfilment, address: address.trim() });
     setBusy(false);
     if (res.error) return setError(res.error);
-    setDone(res.result ?? null);
-  };
-
-  const messageOwner = async () => {
-    if (!user || !item.ownerId) return;
-    setError(null);
-    setBusy(true);
-    const { data: existing } = await supabase
-      .from('conversations')
-      .select('id')
-      .eq('equipment_id', item.id)
-      .eq('renter_id', user.id)
-      .maybeSingle();
-    let conversationId: number | undefined = existing?.id;
-    if (!conversationId) {
-      const { data, error: err } = await supabase
-        .from('conversations')
-        .insert({ equipment_id: item.id, renter_id: user.id, owner_id: item.ownerId })
-        .select('id')
-        .single();
-      if (err || !data) {
-        setBusy(false);
-        return setError(err?.message ?? 'Could not start the conversation.');
-      }
-      conversationId = data.id;
-    }
-    setBusy(false);
-    onClose();
-    router.push(`/chat/${conversationId}`);
+    setDone(true);
   };
 
   const remove = async () => {
@@ -117,21 +108,24 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
             {done ? (
               <View>
                 <T style={{ fontSize: 24, fontWeight: '800', letterSpacing: -0.5, marginTop: 8, marginRight: 42 }}>
-                  Booking request sent ✓
+                  Request sent ✓
                 </T>
                 <T style={{ lineHeight: 24, marginTop: 14 }}>
-                  Your request for <T style={{ fontWeight: '800' }}>{item.name}</T> has been recorded.
+                  Your request for <T style={{ fontWeight: '800' }}>{item.name}</T> is with the owner.
                 </T>
                 <T style={{ lineHeight: 24, marginTop: 8 }}>
-                  Dates: {start} to {end} ({done.days} day{done.days === 1 ? '' : 's'})
+                  Dates: {formatDate(start)} to {formatDate(end)} ({q?.days} day{q?.days === 1 ? '' : 's'})
                 </T>
                 <T style={{ lineHeight: 24, marginTop: 8 }}>
-                  Estimated rental total: <T style={{ fontWeight: '800' }}>{money(done.total)}</T>
+                  Total if approved: <T style={{ fontWeight: '800' }}>{q ? money(q.total) : ''}</T>
                 </T>
                 <Notice>
-                  The owner will contact you on {phone} to confirm availability and final pricing.
+                  Next: the owner approves, you pay (held securely), the machine is delivered or collected, and your rental countdown starts when you confirm you have it. Track every step in My rentals.
                 </Notice>
-                <Button label="Done" onPress={onClose} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+                  <Button label="Track in My rentals →" onPress={() => { onClose(); router.push('/rentals'); }} />
+                  <Button variant="secondary" label="Done" onPress={onClose} />
+                </View>
               </View>
             ) : (
               <View>
@@ -149,17 +143,50 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                     backgroundColor: item.color || '#e8eee4',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Text style={[{ fontSize: 92, lineHeight: 110 }, emojiShadow(9, 5, 'rgba(35,60,37,0.11)')]}>
-                    {item.emoji || '🚜'}
-                  </Text>
+                  {item.images[photo] ? (
+                    <Image source={{ uri: item.images[photo] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  ) : (
+                    <Text style={[{ fontSize: 92, lineHeight: 110 }, emojiShadow(9, 5, 'rgba(35,60,37,0.11)')]}>
+                      {item.emoji || '🚜'}
+                    </Text>
+                  )}
                 </View>
+                {item.images.length > 1 ? (
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+                    {item.images.map((u, i) => (
+                      <Pressable key={u} onPress={() => setPhoto(i)} style={[{ borderRadius: 8, overflow: 'hidden', borderWidth: 2, borderColor: i === photo ? colors.green : 'transparent' }, web({ cursor: 'pointer' })]}>
+                        <Image source={{ uri: u }} style={{ width: 56, height: 56 }} resizeMode="cover" />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
                 <T style={{ fontSize: 21, fontWeight: '800', color: colors.green }}>
                   {money(item.price)} <T style={{ fontSize: 11, color: colors.muted, fontWeight: '500' }}>/ day · indicative price</T>
                 </T>
                 <T style={{ color: colors.muted, marginTop: 14 }}>⌖ {item.location}</T>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                  {item.ownerVerified ? <VerifiedBadge /> : null}
+                  <Stars rating={item.avgRating} count={item.reviewCount} size={13} />
+                  {item.ownerName ? <T style={{ fontSize: 12, color: colors.muted }}>Owner: {item.ownerName}</T> : null}
+                </View>
                 <T style={{ lineHeight: 24, marginTop: 14 }}>{item.description}</T>
+                <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 14, gap: 6 }}>
+                  <T style={{ fontSize: 13 }}>Condition: <T style={{ fontWeight: '700' }}>{item.condition}</T>{item.yearMade ? ` · ${item.yearMade}` : ''}</T>
+                  {item.specs ? <T style={{ fontSize: 13 }}>Specs: {item.specs}</T> : null}
+                  <T style={{ fontSize: 13 }}>
+                    {[item.pickupAvailable ? 'Pickup' : null, item.deliveryAvailable ? `Delivery (${item.deliveryFee ? money(item.deliveryFee) : 'free'})` : null, item.withOperator ? 'Operator included' : null].filter(Boolean).join(' · ')}
+                  </T>
+                  {item.deposit > 0 ? <T style={{ fontSize: 13 }}>Refundable deposit: {money(item.deposit)}</T> : null}
+                  {item.minDays > 1 ? <T style={{ fontSize: 13 }}>Minimum rental: {item.minDays} days</T> : null}
+                  {itemRanges.length ? (
+                    <T style={{ fontSize: 12, color: colors.muted }}>
+                      Booked: {itemRanges.slice(0, 4).map((r) => `${formatDate(r.start)}–${formatDate(r.end)}`).join(', ')}
+                    </T>
+                  ) : null}
+                </View>
 
                 {isOwner ? (
                   <View style={{ marginTop: 22 }}>
@@ -184,6 +211,11 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                 ) : (
                   <View style={{ marginTop: 22 }}>
                     <T style={{ fontSize: 17, fontWeight: '800', marginBottom: 14 }}>Request a rental</T>
+                    {needsProfile ? (
+                      <Pressable onPress={() => { onClose(); router.push('/profile'); }} style={[{ backgroundColor: '#fdf3d9', borderRadius: 12, padding: 12, marginBottom: 14 }, web({ cursor: 'pointer' })]}>
+                        <T style={{ color: '#8a6414', fontSize: 13, lineHeight: 20 }}>Complete your profile (name, phone, state) so owners can trust your request →</T>
+                      </Pressable>
+                    ) : null}
                     <View style={{ gap: 16 }}>
                       <View style={{ flexDirection: isSm ? 'column' : 'row', gap: 16 }}>
                         <Field label="Your name *" style={{ flex: 1 }}>
@@ -208,6 +240,19 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                           <DateField value={end} min={start || today} onChange={setEnd} />
                         </Field>
                       </View>
+                      {item.pickupAvailable && item.deliveryAvailable ? (
+                        <Field label="How do you want to get it?">
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <Chip label="I will collect it" active={fulfilment === 'pickup'} onPress={() => setFulfilment('pickup')} />
+                            <Chip label="Deliver to my farm" active={fulfilment === 'delivery'} onPress={() => setFulfilment('delivery')} />
+                          </View>
+                        </Field>
+                      ) : null}
+                      {fulfilment === 'delivery' ? (
+                        <Field label="Delivery address *">
+                          <TextField value={address} onChangeText={setAddress} placeholder="Farm location, town, LGA, landmark" />
+                        </Field>
+                      ) : null}
                       <Field label="Message to owner">
                         <TextField
                           value={note}
@@ -217,12 +262,19 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                         />
                       </Field>
                     </View>
+                    {clash ? <ErrorText>Those dates overlap an existing booking.</ErrorText> : null}
+                    {q ? (
+                      <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 16, gap: 6 }}>
+                        <T style={{ fontSize: 13 }}>{q.days} day{q.days === 1 ? '' : 's'} × {money(item.price)} = {money(q.rental)}</T>
+                        {q.delivery > 0 ? <T style={{ fontSize: 13 }}>Delivery: {money(q.delivery)}</T> : null}
+                        {q.serviceFee > 0 ? <T style={{ fontSize: 13 }}>Service fee: {money(q.serviceFee)}</T> : null}
+                        {q.deposit > 0 ? <T style={{ fontSize: 13 }}>Refundable deposit: {money(q.deposit)}</T> : null}
+                        <T style={{ fontSize: 16, fontWeight: '800', color: colors.green, marginTop: 4 }}>Total: {money(q.total)}</T>
+                      </View>
+                    ) : null}
                     <ErrorText>{error}</ErrorText>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }}>
-                      <Button label="Send booking request →" onPress={submit} loading={busy} />
-                      {item.ownerId ? <Button variant="secondary" label="💬 Message owner" onPress={messageOwner} disabled={busy} /> : null}
-                    </View>
-                    <Notice>Your request goes to the equipment owner, who will confirm availability and final pricing.</Notice>
+                    <Button label="Send booking request →" onPress={submit} loading={busy} disabled={clash} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
+                    <Notice>You pay only after the owner approves. Your payment is held securely until the rental is complete.</Notice>
                   </View>
                 )}
               </View>
