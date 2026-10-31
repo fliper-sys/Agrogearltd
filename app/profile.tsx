@@ -8,7 +8,11 @@ import { Button, Chip, ErrorText, Field, Notice, SelectField, T, TextField } fro
 import { profileComplete, useAuth } from '@/context/AuthContext';
 import { useMarket } from '@/context/MarketContext';
 import { ID_TYPES, NIGERIA_STATES } from '@/lib/data';
+import { Avatar } from '@/components/Avatar';
 import { pickFiles, uploadFile } from '@/lib/files';
+import { pickImage, resizeImage } from '@/lib/pickImage';
+import { useProfileStats } from '@/lib/reviews';
+import { useTour } from '@/context/TourContext';
 import { colors, useBreakpoint, web } from '@/lib/theme';
 import { formatDate } from '@/lib/time';
 
@@ -37,7 +41,7 @@ export default function ProfileScreen() {
   const { isSm } = useBreakpoint();
   const router = useRouter();
   const toast = useToast();
-  const { user, loading, profile, displayName, updateProfile, submitVerification, resetPassword, signOut } = useAuth();
+  const { user, loading, profile, displayName, updateProfile, changeAvatar, removeAvatar, submitVerification, resetPassword, signOut } = useAuth();
   const { equipment, deleteListing } = useMarket();
 
   const [fullName, setFullName] = useState('');
@@ -130,19 +134,96 @@ export default function ProfileScreen() {
 
   const idLabel = ID_TYPES.find((t) => t.value === profile?.idType)?.label;
 
+  const { openTour } = useTour();
+  const stats = useProfileStats(user?.id);
+  const checklist = [
+    { label: 'Add your name', done: Boolean(profile?.fullName.trim()) },
+    { label: 'Add a phone number', done: Boolean(profile?.phone.trim()) },
+    { label: 'Choose your state', done: Boolean(profile?.state) },
+    { label: 'Add a profile photo', done: Boolean(profile?.avatarUrl) },
+    { label: 'Write a short bio', done: Boolean(profile?.bio.trim()) },
+    { label: 'Get your ID verified', done: profile?.verificationStatus === 'verified' },
+  ];
+  const doneCount = checklist.filter((c) => c.done).length;
+  const pct = Math.round((doneCount / checklist.length) * 100);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const uploadPhoto = async () => {
+    setPhotoError(null);
+    const file = await pickImage();
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      const res = await changeAvatar(await resizeImage(file, 512));
+      if (res.error) setPhotoError(res.error);
+      else toast('Profile photo updated.');
+    } catch (e: any) {
+      setPhotoError(e?.message ?? 'Could not upload that photo.');
+    }
+    setPhotoBusy(false);
+  };
+  const deletePhoto = async () => {
+    setPhotoBusy(true);
+    const res = await removeAvatar();
+    setPhotoBusy(false);
+    if (res.error) setPhotoError(res.error);
+    else toast('Profile photo removed.');
+  };
+
   return (
     <PageShell title="Profile & settings" subtitle="Keep your details accurate. Verified profiles earn more trust and more bookings.">
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }}>
-            <T style={{ fontSize: 24, fontWeight: '800', color: colors.green }}>{displayName.charAt(0).toUpperCase()}</T>
-          </View>
+          <Avatar url={profile?.avatarUrl} name={displayName || user?.email} size={72} />
           <View style={{ flex: 1, gap: 6 }}>
             <T style={{ fontSize: 20, fontWeight: '800' }}>{displayName || 'Your account'}</T>
             <T style={{ color: colors.muted, fontSize: 13 }}>{user?.email}</T>
             {status === 'verified' ? <VerifiedBadge /> : null}
+            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+              <Button small variant="secondary" label="📷 Upload photo" onPress={uploadPhoto} loading={photoBusy} />
+              {profile?.avatarUrl ? <Button small variant="secondary" label="Remove" onPress={deletePhoto} disabled={photoBusy} /> : null}
+            </View>
           </View>
         </View>
+        <ErrorText>{photoError}</ErrorText>
+        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+          <Button small variant="secondary" label="👁 View public profile" onPress={() => user && router.push(`/u/${user.id}`)} />
+          <Button small variant="secondary" label="🌱 Take the tour" onPress={openTour} />
+          <Button small variant="secondary" label="🛟 Help & support" onPress={() => router.push('/help')} />
+        </View>
+        {profile?.isAdmin ? <Button label="🛡 Open admin dashboard" onPress={() => router.push('/admin')} style={{ marginTop: 14, alignSelf: 'flex-start' }} /> : null}
+      </Card>
+
+      <Card>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <T style={{ fontSize: 18, fontWeight: '800' }}>Profile strength</T>
+          <T style={{ fontWeight: '800', color: colors.green }}>{pct}%</T>
+        </View>
+        <View style={{ height: 10, borderRadius: 5, backgroundColor: '#ecefe6', overflow: 'hidden', marginTop: 10 }}>
+          <View style={{ width: `${pct}%`, height: 10, backgroundColor: colors.green }} />
+        </View>
+        <View style={{ marginTop: 12, gap: 6 }}>
+          {checklist.map((c) => (
+            <T key={c.label} style={{ fontSize: 13, color: c.done ? colors.muted : colors.ink, textDecorationLine: c.done ? 'line-through' : 'none' }}>
+              {c.done ? '✅' : '⬜'} {c.label}
+            </T>
+          ))}
+        </View>
+        {stats ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
+            {[
+              { v: stats.owner_reviews ? `★ ${Number(stats.owner_rating).toFixed(1)}` : '—', l: `Owner rating (${stats.owner_reviews})` },
+              { v: stats.renter_reviews ? `★ ${Number(stats.renter_rating).toFixed(1)}` : '—', l: `Renter rating (${stats.renter_reviews})` },
+              { v: String(stats.listings), l: 'Active listings' },
+              { v: String(stats.completed_as_owner + stats.completed_as_renter), l: 'Rentals completed' },
+            ].map((x) => (
+              <View key={x.l} style={{ flexGrow: 1, flexBasis: 120, backgroundColor: colors.cream, borderRadius: 12, padding: 12 }}>
+                <T style={{ fontSize: 20, fontWeight: '800', color: colors.green }}>{x.v}</T>
+                <T style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>{x.l}</T>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </Card>
 
       <Card>

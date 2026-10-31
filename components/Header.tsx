@@ -4,14 +4,18 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useRentals } from '@/context/RentalsContext';
 import { colors, useBreakpoint, web } from '@/lib/theme';
+import { useUnreadCounts } from '@/lib/useUnread';
+import { Avatar } from './Avatar';
 import { Brand, Button, T } from './ui';
 
 type Props = {
-  favouriteCount: number;
-  showingFavourites: boolean;
-  onMarketplace: () => void;
-  onFavourites: () => void;
-  onList: () => void;
+  favouriteCount?: number;
+  showingFavourites?: boolean;
+  /** Provided only by the marketplace screen; other screens link back to it. */
+  onMarketplace?: () => void;
+  onFavourites?: () => void;
+  onList?: () => void;
+  active?: 'stores' | 'messages' | 'admin' | 'profile' | 'rentals' | 'help';
 };
 
 function NavLink({ label, onPress, active }: { label: string; onPress: () => void; active?: boolean }) {
@@ -30,13 +34,17 @@ function NavLink({ label, onPress, active }: { label: string; onPress: () => voi
   );
 }
 
-export function Header({ favouriteCount, showingFavourites, onMarketplace, onFavourites, onList }: Props) {
-  const { isSm, isMd } = useBreakpoint();
-  const { user, displayName, signOut } = useAuth();
+export function Header({ favouriteCount = 0, showingFavourites = false, onMarketplace: onHome, onFavourites, onList, active }: Props) {
+  const { width, isSm } = useBreakpoint();
+  const isMd = width <= 1100;
+  const { user, displayName, signOut, profile } = useAuth();
   const router = useRouter();
   const { actionNeeded, unread } = useRentals();
+  const { total: unreadChats } = useUnreadCounts();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const router2 = router;
+  const onMarketplace = onHome ?? (() => router2.push('/'));
   const badge = Math.max(actionNeeded, unread);
   const rentLabel = `My rentals${badge ? ` (${badge})` : ''}`;
   const favLabel = `♥ Favourites${favouriteCount ? ` (${favouriteCount})` : ''}`;
@@ -45,21 +53,23 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
     fn();
   };
 
+  const links: { label: string; onPress: () => void; active?: boolean }[] = [
+    { label: 'Marketplace', onPress: onMarketplace },
+    ...(onFavourites ? [{ label: favLabel, onPress: onFavourites, active: showingFavourites }] : []),
+    ...(onList ? [{ label: 'List equipment', onPress: onList }] : []),
+    ...(user ? [{ label: rentLabel, onPress: () => router.push('/rentals'), active: active === 'rentals' }] : []),
+    { label: '🏪 Agro stores', onPress: () => router.push('/stores'), active: active === 'stores' },
+    ...(user ? [{ label: `💬 Messages${unreadChats ? ` (${unreadChats})` : ''}`, onPress: () => router.push('/messages'), active: active === 'messages' }] : []),
+    { label: '🛟 Help', onPress: () => router.push('/help'), active: active === 'help' },
+    ...(profile?.isAdmin ? [{ label: '🛡 Admin', onPress: () => router.push('/admin'), active: active === 'admin' }] : []),
+  ];
+
   const authControl = user ? (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <View
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 17,
-          backgroundColor: colors.mint,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <T style={{ color: colors.green, fontWeight: '800', fontSize: 14 }}>{displayName.charAt(0).toUpperCase()}</T>
-      </View>
-      <NavLink label="Profile" onPress={go(() => router.push('/profile'))} />
+      <Pressable accessibilityRole="link" accessibilityLabel="Your profile" onPress={go(() => router.push('/profile'))} style={web({ cursor: 'pointer' })}>
+        <Avatar url={profile?.avatarUrl} name={displayName} size={34} />
+      </Pressable>
+      <NavLink label="Profile" onPress={go(() => router.push('/profile'))} active={active === 'profile'} />
       <NavLink label="Sign out" onPress={go(() => signOut())} />
     </View>
   ) : (
@@ -116,11 +126,10 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
             </Pressable>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 27 }}>
-            <NavLink label="Marketplace" onPress={onMarketplace} />
-            <NavLink label={favLabel} onPress={onFavourites} active={showingFavourites} />
-            <NavLink label="List equipment" onPress={onList} />
-            {user ? <NavLink label={rentLabel} onPress={() => router.push('/rentals')} /> : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 22 }}>
+            {links.map((l) => (
+              <NavLink key={l.label} label={l.label} onPress={l.onPress} active={l.active} />
+            ))}
             {authControl}
             <Button label="Find equipment ↗" onPress={onMarketplace} />
           </View>
@@ -138,10 +147,9 @@ export function Header({ favouriteCount, showingFavourites, onMarketplace, onFav
             paddingTop: 16,
           }}
         >
-          <NavLink label="Marketplace" onPress={go(onMarketplace)} />
-          <NavLink label={favLabel} onPress={go(onFavourites)} active={showingFavourites} />
-          <NavLink label="List equipment" onPress={go(onList)} />
-          {user ? <NavLink label={rentLabel} onPress={go(() => router.push('/rentals'))} /> : null}
+          {links.map((l) => (
+            <NavLink key={l.label} label={l.label} onPress={go(l.onPress)} active={l.active} />
+          ))}
           {authControl}
         </View>
       ) : null}

@@ -7,6 +7,7 @@ import { colors, web } from '@/lib/theme';
 import { formatDate, formatDateTime } from '@/lib/time';
 import { StatusPill } from './Badges';
 import { Countdown } from './Countdown';
+import { BookingReviews } from './BookingReviews';
 import { Card } from './PageShell';
 import { useToast } from './Toast';
 import { Button, ErrorText, Field, Notice, T, TextField } from './ui';
@@ -61,23 +62,11 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
   );
 }
 
-function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: 6 }}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Pressable key={n} accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`} onPress={() => onChange(n)} style={web({ cursor: 'pointer' })}>
-          <T style={{ fontSize: 28, color: n <= value ? '#d79b2d' : '#d6d9d0' }}>★</T>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 type NoteSpec = { action: Action; title: string; placeholder: string; confirm: string; required?: boolean };
 
 export function BookingCard({ booking: b, role }: { booking: Booking; role: 'renter' | 'owner' }) {
   const { equipment } = useMarket();
-  const { act, pay, review, ownerContact } = useRentals();
+  const { act, pay, ownerContact } = useRentals();
   const toast = useToast();
   const item = equipment.find((e) => e.id === b.equipmentId);
 
@@ -85,8 +74,6 @@ export function BookingCard({ booking: b, role }: { booking: Booking; role: 'ren
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [noteSpec, setNoteSpec] = useState<NoteSpec | null>(null);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
   const [contact, setContact] = useState<{ name: string; phone: string } | null>(null);
 
   useEffect(() => {
@@ -120,15 +107,6 @@ export function BookingCard({ booking: b, role }: { booking: Booking; role: 'ren
     if (res.cancelled) return toast('Payment cancelled.');
     if (res.error) return setError(res.error);
     toast('Payment received and held securely.');
-  };
-
-  const submitReview = async () => {
-    setBusy(true);
-    setError(null);
-    const res = await review(b.id, rating, comment.trim());
-    setBusy(false);
-    if (res.error) return setError(res.error);
-    toast('Thanks for your review!');
   };
 
   const startsAt = new Date(b.startDate + 'T08:00:00').toISOString();
@@ -217,17 +195,7 @@ export function BookingCard({ booking: b, role }: { booking: Booking; role: 'ren
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>{actions}</View>
       ) : null}
 
-      {role === 'renter' && b.status === 'completed' && !b.reviewed ? (
-        <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 14 }}>
-          <T style={{ fontWeight: '800', marginBottom: 8 }}>How was this rental?</T>
-          <StarPicker value={rating} onChange={setRating} />
-          <View style={{ marginTop: 10 }}>
-            <TextField value={comment} onChangeText={setComment} multiline placeholder="Condition of the machine, owner communication, delivery…" />
-          </View>
-          <Button label="Submit review" onPress={submitReview} loading={busy} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
-        </View>
-      ) : null}
-      {role === 'renter' && b.status === 'completed' && b.reviewed ? <Notice>You reviewed this rental. Thank you!</Notice> : null}
+      <BookingReviews booking={b} role={role} />
       {b.status === 'approved' && role === 'renter' ? <Notice>Your payment is held securely and only released to the owner once the rental is complete.</Notice> : null}
       {b.status === 'disputed' ? <Notice>The AgroGear team will review this dispute. Payment stays on hold until it is resolved.</Notice> : null}
 

@@ -22,6 +22,10 @@ export type Profile = {
   rejectionReason: string | null;
   verifiedAt: string | null;
   isAdmin: boolean;
+  avatarUrl: string | null;
+  tourDone: boolean;
+  accountStatus: 'active' | 'suspended';
+  suspendedReason: string | null;
   notifyEmail: boolean;
   notifySms: boolean;
 };
@@ -44,6 +48,10 @@ function profileFromRow(r: any): Profile {
     rejectionReason: r.rejection_reason ?? null,
     verifiedAt: r.verified_at ?? null,
     isAdmin: Boolean(r.is_admin),
+    avatarUrl: r.avatar_url ?? null,
+    tourDone: Boolean(r.tour_done),
+    accountStatus: r.account_status === 'suspended' ? 'suspended' : 'active',
+    suspendedReason: r.suspended_reason ?? null,
     notifyEmail: r.notify_email ?? true,
     notifySms: r.notify_sms ?? true,
   };
@@ -64,6 +72,10 @@ type AuthState = {
   updateProfile: (edit: ProfileEdit) => Promise<Result>;
   submitVerification: (idType: string, idNumber: string, docPath: string) => Promise<Result>;
   signIn: (email: string, password: string) => Promise<Result>;
+  signInWithGoogle: () => Promise<Result>;
+  setTourDone: (done: boolean) => Promise<void>;
+  changeAvatar: (blob: Blob) => Promise<Result>;
+  removeAvatar: () => Promise<Result>;
   signUp: (name: string, email: string, password: string) => Promise<Result>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<Result>;
@@ -107,6 +119,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (email: string, password: string): Promise<Result> => {
     if (!isSupabaseConfigured) return { error: NOT_CONFIGURED };
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    return error ? { error: error.message } : {};
+  }, []);
+
+  const signInWithGoogle = useCallback(async (): Promise<Result> => {
+    if (!isSupabaseConfigured) return { error: NOT_CONFIGURED };
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: siteUrl() } });
     return error ? { error: error.message } : {};
   }, []);
 
@@ -202,6 +220,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [refreshProfile],
   );
 
+  const setTourDone = useCallback(
+    async (done: boolean) => {
+      setProfile((p) => (p ? { ...p, tourDone: done } : p));
+      if (userId) await supabase.from('profiles').update({ tour_done: done }).eq('id', userId);
+    },
+    [userId],
+  );
+
+  const changeAvatar = useCallback(
+    async (blob: Blob): Promise<Result> => {
+      if (!userId) return { error: 'Sign in first.' };
+      const path = `${userId}/avatar-${Date.now()}.jpg`;
+      const up = await supabase.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      if (up.error) return { error: up.error.message };
+      const url = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+      const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId);
+      if (error) return { error: error.message };
+      await refreshProfile();
+      return {};
+    },
+    [userId, refreshProfile],
+  );
+
+  const removeAvatar = useCallback(async (): Promise<Result> => {
+    if (!userId) return { error: 'Sign in first.' };
+    const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId);
+    if (error) return { error: error.message };
+    await refreshProfile();
+    return {};
+  }, [userId, refreshProfile]);
+
   const displayName = useMemo(() => {
     if (profile?.fullName.trim()) return profile.fullName.trim();
     const meta = user?.user_metadata?.full_name;
@@ -211,9 +260,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthState>(
     () => ({
       user, session, loading, displayName, recovering, profile, refreshProfile, updateProfile, submitVerification,
-      signIn, signUp, signOut, resetPassword, updatePassword,
+      signIn, signInWithGoogle, setTourDone, changeAvatar, removeAvatar, signUp, signOut, resetPassword, updatePassword,
     }),
-    [user, session, loading, displayName, recovering, profile, refreshProfile, updateProfile, submitVerification, signIn, signUp, signOut, resetPassword, updatePassword],
+    [user, session, loading, displayName, recovering, profile, refreshProfile, updateProfile, submitVerification, signIn, signInWithGoogle, setTourDone, changeAvatar, removeAvatar, signUp, signOut, resetPassword, updatePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

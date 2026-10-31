@@ -10,6 +10,8 @@ import { quote } from '@/lib/pricing';
 import { overlaps } from '@/lib/search';
 import { formatDate } from '@/lib/time';
 import { colors, emojiShadow, useBreakpoint, web } from '@/lib/theme';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { ReviewList } from './Reviews';
 import { useToast } from './Toast';
 import { Stars, VerifiedBadge } from './Badges';
 import { Button, Chip, DateField, Eyebrow, ErrorText, Field, Notice, T, TextField } from './ui';
@@ -33,6 +35,30 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
   const [fulfilment, setFulfilment] = useState<'pickup' | 'delivery'>('pickup');
   const [address, setAddress] = useState('');
   const [photo, setPhoto] = useState(0);
+
+  const messageOwner = async () => {
+    if (!user) return router.push('/auth');
+    if (!item?.ownerId) return;
+    setError(null);
+    setBusy(true);
+    const { data: existing } = await supabase
+      .from('conversations').select('id').eq('equipment_id', item.id).eq('renter_id', user.id).maybeSingle();
+    let conversationId: number | undefined = existing?.id;
+    if (!conversationId) {
+      const { data, error: err } = await supabase
+        .from('conversations')
+        .insert({ equipment_id: item.id, renter_id: user.id, owner_id: item.ownerId })
+        .select('id').single();
+      if (err || !data) {
+        setBusy(false);
+        return setError(err?.message ?? 'Could not start the conversation.');
+      }
+      conversationId = data.id;
+    }
+    setBusy(false);
+    onClose();
+    router.push(`/chat/${conversationId}`);
+  };
 
   // Reset the form each time a different machine is opened.
   useEffect(() => {
@@ -170,7 +196,15 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
                   {item.ownerVerified ? <VerifiedBadge /> : null}
                   <Stars rating={item.avgRating} count={item.reviewCount} size={13} />
-                  {item.ownerName ? <T style={{ fontSize: 12, color: colors.muted }}>Owner: {item.ownerName}</T> : null}
+                  {item.ownerName ? (
+                    <Pressable
+                      disabled={!item.ownerId}
+                      onPress={() => { onClose(); router.push(`/u/${item.ownerId}`); }}
+                      style={web({ cursor: item.ownerId ? 'pointer' : 'default' })}
+                    >
+                      <T style={{ fontSize: 12, color: item.ownerId ? colors.green : colors.muted, fontWeight: item.ownerId ? '700' : '400' }}>Owner: {item.ownerName}{item.ownerId ? ' →' : ''}</T>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <T style={{ lineHeight: 24, marginTop: 14 }}>{item.description}</T>
                 <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 14, gap: 6 }}>
@@ -188,6 +222,12 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                   ) : null}
                 </View>
 
+                {item.ownerId ? (
+                  <View style={{ marginTop: 22 }}>
+                    <T style={{ fontSize: 17, fontWeight: '800', marginBottom: 12 }}>Reviews</T>
+                    <ReviewList equipmentId={item.id} limit={3} />
+                  </View>
+                ) : null}
                 {isOwner ? (
                   <View style={{ marginTop: 22 }}>
                     <T style={{ fontSize: 17, fontWeight: '800' }}>This is your listing</T>
@@ -273,7 +313,12 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                       </View>
                     ) : null}
                     <ErrorText>{error}</ErrorText>
-                    <Button label="Send booking request →" onPress={submit} loading={busy} disabled={clash} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }}>
+                      <Button label="Send booking request →" onPress={submit} loading={busy} disabled={clash} />
+                      {item.ownerId && item.ownerId !== user?.id && isSupabaseConfigured ? (
+                        <Button variant="secondary" label="💬 Message owner" onPress={messageOwner} disabled={busy} />
+                      ) : null}
+                    </View>
                     <Notice>You pay only after the owner approves. Your payment is held securely until the rental is complete.</Notice>
                   </View>
                 )}
