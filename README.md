@@ -85,3 +85,15 @@ Real money payouts to owners (release funds manually from Paystack for now), pus
 - **Profile photos**: upload from Profile & settings; shown in chat, header and listings.
 - **Admin** (`/admin`): dashboard stats, ID verification queue, edit/restrict/promote users, hide or feature listings,
   view every booking, verify or remove stores. Restricted accounts can browse but cannot list, book or message.
+
+## v3.1: reviews, walkthrough, help centre, support, better chat
+
+Run `supabase/migrations/004_reviews_support_chat.sql` after `003_merge_features.sql` (safe to re-run).
+
+- **Reviews**: star ratings with labels and a rating breakdown, owner public replies, review editing for 14 days, owners rate renters.
+  Reviews show on listings and on public profiles (`/u/:id`).
+- **Public profiles** (`/u/:id`): photo, verified badge, owner and renter ratings, active listings, reviews. No phone, address or ID data is exposed.
+- **Walkthrough + Help centre** (`/help`): an 8-step first-visit tour (re-run from Help or Profile), renter/owner/safety guides, FAQ.
+- **Contact support**: tickets with a threaded conversation; admins reply from Admin → Support and users get a notification.
+- **Chat**: read receipts (✓ / ✓✓), typing indicator, unread badges, date dividers, quick replies, Enter to send, link to the other user's profile.
+- **Profile**: profile-strength checklist and your ratings.

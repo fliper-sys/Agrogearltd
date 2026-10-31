@@ -37,6 +37,7 @@ export type ChatMessage = {
   kind: 'text' | 'system';
   body: string;
   created_at: string;
+  read_at?: string | null;
 };
 
 export type LiveShare = {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { useToast } from '@/components/Toast';
 import { Button, Chip, ErrorText, Field, SelectField, T, TextField } from '@/components/ui';
@@ -7,7 +7,9 @@ import { useAuth } from '@/context/AuthContext';
 import { CATEGORIES, ID_TYPES, NIGERIA_STATES } from '@/lib/data';
 import { money } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
-import { colors, useBreakpoint } from '@/lib/theme';
+import { timeAgo } from '@/lib/geo';
+import { StatusTag, TicketThread } from '@/components/SupportPanel';
+import { colors, useBreakpoint, web } from '@/lib/theme';
 import type { Store } from '@/lib/types';
 
 const card = {
@@ -583,6 +585,75 @@ export function AdminVerification({ onChange }: { onChange?: () => void }) {
             <Button variant="secondary" small label="Reject" onPress={() => decide(r.id, false)} disabled={busy === r.id} />
           </View>
         </View>
+      ))}
+    </View>
+  );
+}
+
+// ───────────────────────── Support inbox ─────────────────────────
+
+type InboxRow = {
+  id: number; user_id: string; user_name: string | null; user_email: string | null;
+  category: string; subject: string; status: 'open' | 'answered' | 'closed'; created_at: string; updated_at: string;
+};
+
+export function AdminSupport({ onChange }: { onChange?: () => void }) {
+  const [rows, setRows] = useState<InboxRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState<InboxRow | null>(null);
+  const [filter, setFilter] = useState<'active' | 'closed' | 'all'>('active');
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const { data, error: e } = await supabase.rpc('admin_support_inbox');
+    if (e) setError(e.message);
+    const list = (data as InboxRow[]) ?? [];
+    setRows(list);
+    setOpen((o) => (o ? list.find((r) => r.id === o.id) ?? o : o));
+    setLoading(false);
+    onChange?.();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) return <Loading />;
+
+  if (open) {
+    return (
+      <View style={{ gap: 12 }}>
+        <View style={{ ...card, gap: 4 }}>
+          <T style={{ fontWeight: '800' }}>{open.user_name || 'User'} · {open.user_email ?? 'no email'}</T>
+          <T style={{ color: colors.muted, fontSize: 12 }}>Category: {open.category}</T>
+        </View>
+        <View style={card}>
+          <TicketThread ticket={open} staff onChanged={load} onBack={() => setOpen(null)} />
+        </View>
+      </View>
+    );
+  }
+
+  const visible = rows.filter((r) => (filter === 'all' ? true : filter === 'closed' ? r.status === 'closed' : r.status !== 'closed'));
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <Chip label="Needs attention" active={filter === 'active'} onPress={() => setFilter('active')} />
+        <Chip label="Closed" active={filter === 'closed'} onPress={() => setFilter('closed')} />
+        <Chip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+      </View>
+      <ErrorText>{error}</ErrorText>
+      {visible.length === 0 ? <Empty>No support tickets here. 🎉</Empty> : null}
+      {visible.map((r) => (
+        <Pressable key={r.id} onPress={() => setOpen(r)} style={[{ ...card, gap: 6 }, web({ cursor: 'pointer' })]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+            <T style={{ fontWeight: '800', flex: 1 }}>{r.subject}</T>
+            <StatusTag status={r.status} />
+          </View>
+          <T style={{ color: colors.muted, fontSize: 12 }}>
+            {r.user_name || 'User'} · {r.user_email ?? 'no email'} · {r.category} · updated {timeAgo(r.updated_at)}
+          </T>
+        </Pressable>
       ))}
     </View>
   );

@@ -61,8 +61,7 @@ create policy "insert own profile" on public.profiles for insert to authenticate
 
 -- Public view now also exposes the avatar (still no phone, address or ID data).
 drop view if exists public.equipment_feed;
-drop view if exists public.public_profiles;
-create view public.public_profiles as
+create or replace view public.public_profiles as
   select id, full_name, state, farm_name, bio,
          (verification_status = 'verified') as is_verified,
          verified_at, created_at, avatar_url

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { AdminBookings, AdminListings, AdminStores, AdminUsers, AdminVerification } from '@/components/admin/Panels';
+import { AdminBookings, AdminListings, AdminStores, AdminSupport, AdminUsers, AdminVerification } from '@/components/admin/Panels';
 import { Header } from '@/components/Header';
 import { Button, Chip, Eyebrow, T } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -9,12 +9,12 @@ import { money } from '@/lib/format';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { colors, useBreakpoint } from '@/lib/theme';
 
-type Tab = 'overview' | 'verification' | 'users' | 'listings' | 'bookings' | 'stores';
+type Tab = 'overview' | 'support' | 'verification' | 'users' | 'listings' | 'bookings' | 'stores';
 
 type Stats = {
   users: number; suspended: number; pending_verifications: number; listings: number; hidden_listings: number;
   bookings: number; open_bookings: number; disputes: number; gmv: number; stores: number; unverified_stores: number;
-  conversations: number;
+  conversations: number; open_tickets: number; reviews: number;
 };
 
 export default function AdminScreen() {
@@ -43,6 +43,7 @@ export default function AdminScreen() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: '📊 Overview' },
+    { key: 'support', label: `🛟 Support${stats?.open_tickets ? ` (${stats.open_tickets})` : ''}` },
     { key: 'verification', label: `🪪 Verification${stats?.pending_verifications ? ` (${stats.pending_verifications})` : ''}` },
     { key: 'users', label: '👥 Users' },
     { key: 'listings', label: '🚜 Listings' },
@@ -55,6 +56,8 @@ export default function AdminScreen() {
       stats
         ? [
             { emoji: '👥', label: 'Users', value: String(stats.users), note: `${stats.suspended} restricted` },
+            { emoji: '🛟', label: 'Open support tickets', value: String(stats.open_tickets), note: 'Waiting for a reply' },
+            { emoji: '⭐', label: 'Reviews', value: String(stats.reviews), note: 'Listing reviews posted' },
             { emoji: '🪪', label: 'Awaiting ID review', value: String(stats.pending_verifications), note: 'Verification queue' },
             { emoji: '🚜', label: 'Listings', value: String(stats.listings), note: `${stats.hidden_listings} hidden` },
             { emoji: '📅', label: 'Bookings', value: String(stats.bookings), note: `${stats.open_bookings} in progress` },
@@ -124,6 +127,7 @@ export default function AdminScreen() {
               <ActivityIndicator color={colors.green} />
             )
           ) : null}
+          {tab === 'support' ? <AdminSupport onChange={loadStats} /> : null}
           {tab === 'verification' ? <AdminVerification onChange={loadStats} /> : null}
           {tab === 'users' ? <AdminUsers /> : null}
           {tab === 'listings' ? <AdminListings /> : null}

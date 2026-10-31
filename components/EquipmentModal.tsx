@@ -11,6 +11,7 @@ import { overlaps } from '@/lib/search';
 import { formatDate } from '@/lib/time';
 import { colors, emojiShadow, useBreakpoint, web } from '@/lib/theme';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { ReviewList } from './Reviews';
 import { useToast } from './Toast';
 import { Stars, VerifiedBadge } from './Badges';
 import { Button, Chip, DateField, Eyebrow, ErrorText, Field, Notice, T, TextField } from './ui';
@@ -195,7 +196,15 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
                   {item.ownerVerified ? <VerifiedBadge /> : null}
                   <Stars rating={item.avgRating} count={item.reviewCount} size={13} />
-                  {item.ownerName ? <T style={{ fontSize: 12, color: colors.muted }}>Owner: {item.ownerName}</T> : null}
+                  {item.ownerName ? (
+                    <Pressable
+                      disabled={!item.ownerId}
+                      onPress={() => { onClose(); router.push(`/u/${item.ownerId}`); }}
+                      style={web({ cursor: item.ownerId ? 'pointer' : 'default' })}
+                    >
+                      <T style={{ fontSize: 12, color: item.ownerId ? colors.green : colors.muted, fontWeight: item.ownerId ? '700' : '400' }}>Owner: {item.ownerName}{item.ownerId ? ' →' : ''}</T>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <T style={{ lineHeight: 24, marginTop: 14 }}>{item.description}</T>
                 <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 14, marginTop: 14, gap: 6 }}>
@@ -213,6 +222,12 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                   ) : null}
                 </View>
 
+                {item.ownerId ? (
+                  <View style={{ marginTop: 22 }}>
+                    <T style={{ fontSize: 17, fontWeight: '800', marginBottom: 12 }}>Reviews</T>
+                    <ReviewList equipmentId={item.id} limit={3} />
+                  </View>
+                ) : null}
                 {isOwner ? (
                   <View style={{ marginTop: 22 }}>
                     <T style={{ fontSize: 17, fontWeight: '800' }}>This is your listing</T>

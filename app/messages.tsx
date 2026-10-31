@@ -11,6 +11,7 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { colors, useBreakpoint, web } from '@/lib/theme';
 import type { Conversation } from '@/lib/types';
 import { useProfilesByIds } from '@/lib/useProfiles';
+import { useUnreadCounts } from '@/lib/useUnread';
 
 export default function MessagesScreen() {
   const { isSm } = useBreakpoint();
@@ -36,9 +37,11 @@ export default function MessagesScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      reloadUnread();
+    }, [load]), // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  const { counts, reload: reloadUnread } = useUnreadCounts();
   const others = rows.map((c) => (c.renter_id === user?.id ? c.owner_id : c.renter_id));
   const profiles = useProfilesByIds(others);
 
@@ -71,6 +74,7 @@ export default function MessagesScreen() {
               {rows.map((c) => {
                 const otherId = c.renter_id === user.id ? c.owner_id : c.renter_id;
                 const other = profiles[otherId];
+                const unread = counts[c.id] ?? 0;
                 return (
                   <Pressable
                     key={c.id}
@@ -95,11 +99,18 @@ export default function MessagesScreen() {
                       <T style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
                         {c.equipment ? `${c.equipment.emoji} ${c.equipment.name}` : 'Listing removed'}
                       </T>
-                      <T numberOfLines={1} style={{ fontSize: 13, marginTop: 5, color: colors.navText }}>
+                      <T numberOfLines={1} style={{ fontSize: 13, marginTop: 5, color: unread ? colors.ink : colors.navText, fontWeight: unread ? '800' : '400' }}>
                         {c.last_message || 'No messages yet'}
                       </T>
                     </View>
-                    <T style={{ color: colors.muted, fontSize: 11 }}>{timeAgo(c.last_message_at)}</T>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <T style={{ color: colors.muted, fontSize: 11 }}>{timeAgo(c.last_message_at)}</T>
+                      {unread ? (
+                        <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                          <T style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{unread}</T>
+                        </View>
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               })}

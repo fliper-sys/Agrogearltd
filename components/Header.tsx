@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useRentals } from '@/context/RentalsContext';
 import { colors, useBreakpoint, web } from '@/lib/theme';
+import { useUnreadCounts } from '@/lib/useUnread';
 import { Avatar } from './Avatar';
 import { Brand, Button, T } from './ui';
 
@@ -14,7 +15,7 @@ type Props = {
   onMarketplace?: () => void;
   onFavourites?: () => void;
   onList?: () => void;
-  active?: 'stores' | 'messages' | 'admin' | 'profile' | 'rentals';
+  active?: 'stores' | 'messages' | 'admin' | 'profile' | 'rentals' | 'help';
 };
 
 function NavLink({ label, onPress, active }: { label: string; onPress: () => void; active?: boolean }) {
@@ -39,6 +40,7 @@ export function Header({ favouriteCount = 0, showingFavourites = false, onMarket
   const { user, displayName, signOut, profile } = useAuth();
   const router = useRouter();
   const { actionNeeded, unread } = useRentals();
+  const { total: unreadChats } = useUnreadCounts();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const router2 = router;
@@ -57,7 +59,8 @@ export function Header({ favouriteCount = 0, showingFavourites = false, onMarket
     ...(onList ? [{ label: 'List equipment', onPress: onList }] : []),
     ...(user ? [{ label: rentLabel, onPress: () => router.push('/rentals'), active: active === 'rentals' }] : []),
     { label: '🏪 Agro stores', onPress: () => router.push('/stores'), active: active === 'stores' },
-    ...(user ? [{ label: '💬 Messages', onPress: () => router.push('/messages'), active: active === 'messages' }] : []),
+    ...(user ? [{ label: `💬 Messages${unreadChats ? ` (${unreadChats})` : ''}`, onPress: () => router.push('/messages'), active: active === 'messages' }] : []),
+    { label: '🛟 Help', onPress: () => router.push('/help'), active: active === 'help' },
     ...(profile?.isAdmin ? [{ label: '🛡 Admin', onPress: () => router.push('/admin'), active: active === 'admin' }] : []),
   ];
 
