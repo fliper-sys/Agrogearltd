@@ -21,6 +21,8 @@ export type NewListing = {
   deliveryFee: number;
   withOperator: boolean;
   images: string[]; // storage paths in the equipment-images bucket
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type BookedRange = { equipmentId: number; start: string; end: string };
@@ -66,6 +68,9 @@ function fromRow(r: any): Equipment {
     deliveryFee: Number(r.delivery_fee ?? 0),
     withOperator: Boolean(r.with_operator),
     images: Array.isArray(r.images) ? r.images.map(publicImageUrl) : [],
+    latitude: r.latitude ?? null,
+    longitude: r.longitude ?? null,
+    ownerAvatar: r.owner_avatar ?? null,
     ownerName: r.owner_name ?? '',
     ownerVerified: Boolean(r.owner_verified),
     avgRating: Number(r.avg_rating ?? 0),
@@ -179,6 +184,8 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
         delivery_fee: input.deliveryAvailable ? input.deliveryFee : 0,
         with_operator: input.withOperator,
         images: input.images,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
       });
       if (error) return { error: error.message };
       await refresh();

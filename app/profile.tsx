@@ -8,7 +8,9 @@ import { Button, Chip, ErrorText, Field, Notice, SelectField, T, TextField } fro
 import { profileComplete, useAuth } from '@/context/AuthContext';
 import { useMarket } from '@/context/MarketContext';
 import { ID_TYPES, NIGERIA_STATES } from '@/lib/data';
+import { Avatar } from '@/components/Avatar';
 import { pickFiles, uploadFile } from '@/lib/files';
+import { pickImage, resizeImage } from '@/lib/pickImage';
 import { colors, useBreakpoint, web } from '@/lib/theme';
 import { formatDate } from '@/lib/time';
 
@@ -37,7 +39,7 @@ export default function ProfileScreen() {
   const { isSm } = useBreakpoint();
   const router = useRouter();
   const toast = useToast();
-  const { user, loading, profile, displayName, updateProfile, submitVerification, resetPassword, signOut } = useAuth();
+  const { user, loading, profile, displayName, updateProfile, changeAvatar, removeAvatar, submitVerification, resetPassword, signOut } = useAuth();
   const { equipment, deleteListing } = useMarket();
 
   const [fullName, setFullName] = useState('');
@@ -130,19 +132,47 @@ export default function ProfileScreen() {
 
   const idLabel = ID_TYPES.find((t) => t.value === profile?.idType)?.label;
 
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const uploadPhoto = async () => {
+    setPhotoError(null);
+    const file = await pickImage();
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      const res = await changeAvatar(await resizeImage(file, 512));
+      if (res.error) setPhotoError(res.error);
+      else toast('Profile photo updated.');
+    } catch (e: any) {
+      setPhotoError(e?.message ?? 'Could not upload that photo.');
+    }
+    setPhotoBusy(false);
+  };
+  const deletePhoto = async () => {
+    setPhotoBusy(true);
+    const res = await removeAvatar();
+    setPhotoBusy(false);
+    if (res.error) setPhotoError(res.error);
+    else toast('Profile photo removed.');
+  };
+
   return (
     <PageShell title="Profile & settings" subtitle="Keep your details accurate. Verified profiles earn more trust and more bookings.">
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }}>
-            <T style={{ fontSize: 24, fontWeight: '800', color: colors.green }}>{displayName.charAt(0).toUpperCase()}</T>
-          </View>
+          <Avatar url={profile?.avatarUrl} name={displayName || user?.email} size={72} />
           <View style={{ flex: 1, gap: 6 }}>
             <T style={{ fontSize: 20, fontWeight: '800' }}>{displayName || 'Your account'}</T>
             <T style={{ color: colors.muted, fontSize: 13 }}>{user?.email}</T>
             {status === 'verified' ? <VerifiedBadge /> : null}
+            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+              <Button small variant="secondary" label="📷 Upload photo" onPress={uploadPhoto} loading={photoBusy} />
+              {profile?.avatarUrl ? <Button small variant="secondary" label="Remove" onPress={deletePhoto} disabled={photoBusy} /> : null}
+            </View>
           </View>
         </View>
+        <ErrorText>{photoError}</ErrorText>
+        {profile?.isAdmin ? <Button label="🛡 Open admin dashboard" onPress={() => router.push('/admin')} style={{ marginTop: 14, alignSelf: 'flex-start' }} /> : null}
       </Card>
 
       <Card>

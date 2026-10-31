@@ -65,3 +65,23 @@ the app cannot skip steps or change prices.
 ### Not included yet
 Real money payouts to owners (release funds manually from Paystack for now), push/SMS delivery of reminders
 (in-app countdown and updates only), rental extensions, in-app chat, native photo/ID upload (web only).
+
+
+## v3: messaging, live tracking, Agro stores, maps, admin tools
+
+### One-time setup
+1. Run `supabase/migrations/003_merge_features.sql` in Supabase → SQL Editor (after `002_v2_upgrade.sql`). Safe to re-run.
+   It also fixes a bug where requesting a showcase listing failed with a `notifications.user_id` null error.
+2. **Google sign-in**: create an OAuth client in Google Cloud (Web application) with the redirect URI
+   `https://<project-ref>.supabase.co/auth/v1/callback`, then enable Google in Supabase → Authentication → Providers.
+   Add your Vercel domain to Supabase → Authentication → URL Configuration (Site URL and Redirect URLs).
+3. Make yourself admin if you have not: `update public.profiles set is_admin = true where id = '<your user uuid>';`
+
+### What is new
+- **Messages** (`/messages`, `/chat/:id`): "💬 Message owner" on any user listing; realtime chat.
+- **Live machine tracking**: either side taps *Share live location* in a chat; the other sees a moving pin (stops itself after 4 hours).
+- **Agro stores** (`/stores`): community-added stores, nearest-store finder from your location, admin verification.
+- **Maps**: free OpenStreetMap (Leaflet), grid/map toggle on the marketplace, pin your location when listing.
+- **Profile photos**: upload from Profile & settings; shown in chat, header and listings.
+- **Admin** (`/admin`): dashboard stats, ID verification queue, edit/restrict/promote users, hide or feature listings,
+  view every booking, verify or remove stores. Restricted accounts can browse but cannot list, book or message.

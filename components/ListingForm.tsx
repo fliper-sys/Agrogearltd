@@ -6,6 +6,7 @@ import { useMarket } from '@/context/MarketContext';
 import { CATEGORIES, CONDITIONS, NIGERIA_STATES } from '@/lib/data';
 import { colors, useBreakpoint, web } from '@/lib/theme';
 import { ImageUploader } from './ImageUploader';
+import { getPosition } from '@/lib/geo';
 import { useToast } from './Toast';
 import { Button, ErrorText, Eyebrow, Field, Notice, SelectField, T, TextField } from './ui';
 
@@ -50,6 +51,20 @@ export function ListingForm({ onPublished }: { onPublished: () => void }) {
   const [images, setImages] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  const pinLocation = async () => {
+    setError(null);
+    setLocating(true);
+    try {
+      const c = await getPosition();
+      setCoords({ lat: c.latitude, lng: c.longitude });
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not get your location.');
+    }
+    setLocating(false);
+  };
 
   // Pre-fill location from the saved profile.
   useEffect(() => {
@@ -88,12 +103,14 @@ export function ListingForm({ onPublished }: { onPublished: () => void }) {
       deliveryFee: delivery ? Math.max(0, Number(deliveryFee) || 0) : 0,
       withOperator: operator,
       images,
+      latitude: coords?.lat ?? null,
+      longitude: coords?.lng ?? null,
     });
     setBusy(false);
     if (res.error) return setError(res.error);
     setName(''); setCategory(''); setPrice(''); setTown(''); setCondition('Good'); setYear(''); setSpecs('');
     setDeposit(''); setMinDays('1'); setPickup(true); setDelivery(false); setDeliveryFee(''); setOperator(false);
-    setDescription(''); setImages([]);
+    setDescription(''); setImages([]); setCoords(null);
     toast('Your equipment is now live on the marketplace!');
     onPublished();
   };
@@ -157,6 +174,16 @@ export function ListingForm({ onPublished }: { onPublished: () => void }) {
             <TextField value={minDays} onChangeText={setMinDays} placeholder="1" keyboardType="numeric" />
           </Field>
         </View>
+        <Field label="Pin on the map (optional)">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <Button variant="secondary" label={coords ? '📍 Update my location' : '📍 Use my current location'} onPress={pinLocation} loading={locating} />
+            {coords ? (
+              <T style={{ fontSize: 12, color: colors.green, fontWeight: '700' }}>Pinned ✓ ({coords.lat.toFixed(3)}, {coords.lng.toFixed(3)})</T>
+            ) : (
+              <T style={{ fontSize: 12, color: colors.muted }}>Helps renters find machines near them.</T>
+            )}
+          </View>
+        </Field>
         <Field label="Key specs">
           <TextField value={specs} onChangeText={setSpecs} placeholder="e.g. 75 HP, 4WD, 3-point hitch, 12-row" />
         </Field>

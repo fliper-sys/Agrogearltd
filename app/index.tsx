@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import MapView from '@/components/MapView';
+import type { MapMarker } from '@/lib/mapTypes';
+import { money } from '@/lib/format';
 import { ActivityIndicator, LayoutChangeEvent, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { EquipmentCard } from '@/components/EquipmentCard';
@@ -36,6 +39,7 @@ export default function Home() {
   const [showingFavourites, setShowingFavourites] = useState(false);
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [gridWidth, setGridWidth] = useState(0);
+  const [view, setView] = useState<'grid' | 'map'>('grid');
 
   const scroller = useRef<any>(null);
   const offsets = useRef<Record<string, number>>({});
@@ -80,6 +84,22 @@ export default function Home() {
     const res = await toggleFavourite(id);
     toast(res.error ?? (had ? 'Removed from favourites.' : 'Added to favourites.'));
   };
+
+  const mapMarkers = useMemo<MapMarker[]>(
+    () =>
+      items
+        .filter((e) => e.latitude != null && e.longitude != null)
+        .map((e) => ({
+          id: `eq-${e.id}`,
+          lat: e.latitude as number,
+          lng: e.longitude as number,
+          emoji: e.emoji,
+          color: e.color,
+          label: `${e.name} · ${money(e.price)}/day · ${e.location}`,
+          onPress: () => setSelected(e),
+        })),
+    [items],
+  );
 
   const cardWidth =
     gridWidth > 0 ? Math.floor((gridWidth - GAP * (columns - 1)) / columns) : `${100 / columns - 2}%`;
@@ -237,9 +257,25 @@ export default function Home() {
               </T>
             ) : null}
 
+            <View style={{ flexDirection: 'row', gap: 9, marginBottom: 16 }}>
+              <Chip label="▦ Grid" active={view === 'grid'} onPress={() => setView('grid')} />
+              <Chip label="🗺 Map" active={view === 'map'} onPress={() => setView('map')} />
+            </View>
+
+            {view === 'map' ? (
+              <View style={{ marginBottom: 8 }}>
+                <MapView markers={mapMarkers} height={isSm ? 380 : 480} fitKey={`${items.length}|${mapMarkers.length}`} />
+                <T style={{ fontSize: 12, color: colors.muted, marginTop: 10 }}>
+                  {mapMarkers.length
+                    ? `Showing ${mapMarkers.length} machine${mapMarkers.length === 1 ? '' : 's'} with a pinned location. Tap a pin for details.`
+                    : 'None of these machines have a pinned location yet. Owners can pin a location when listing.'}
+                </T>
+              </View>
+            ) : null}
+
             <View
               onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
-              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: 6 }}
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: 6, display: view === 'map' ? 'none' : 'flex' }}
             >
               {loading ? (
                 <View style={{ width: '100%', padding: 45, alignItems: 'center' }}>

@@ -43,6 +43,9 @@ export type Equipment = {
   deliveryFee: number;
   withOperator: boolean;
   images: string[];
+  latitude: number | null;
+  longitude: number | null;
+  ownerAvatar: string | null;
   ownerName: string;
   ownerVerified: boolean;
   avgRating: number;
@@ -63,6 +66,9 @@ export const EQUIPMENT_DEFAULTS = {
   deliveryFee: 0,
   withOperator: false,
   images: [] as string[],
+  latitude: null as number | null,
+  longitude: null as number | null,
+  ownerAvatar: null as string | null,
   ownerName: '',
   ownerVerified: false,
   avgRating: 0,

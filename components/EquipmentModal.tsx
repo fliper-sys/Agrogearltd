@@ -10,6 +10,7 @@ import { quote } from '@/lib/pricing';
 import { overlaps } from '@/lib/search';
 import { formatDate } from '@/lib/time';
 import { colors, emojiShadow, useBreakpoint, web } from '@/lib/theme';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { useToast } from './Toast';
 import { Stars, VerifiedBadge } from './Badges';
 import { Button, Chip, DateField, Eyebrow, ErrorText, Field, Notice, T, TextField } from './ui';
@@ -33,6 +34,30 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
   const [fulfilment, setFulfilment] = useState<'pickup' | 'delivery'>('pickup');
   const [address, setAddress] = useState('');
   const [photo, setPhoto] = useState(0);
+
+  const messageOwner = async () => {
+    if (!user) return router.push('/auth');
+    if (!item?.ownerId) return;
+    setError(null);
+    setBusy(true);
+    const { data: existing } = await supabase
+      .from('conversations').select('id').eq('equipment_id', item.id).eq('renter_id', user.id).maybeSingle();
+    let conversationId: number | undefined = existing?.id;
+    if (!conversationId) {
+      const { data, error: err } = await supabase
+        .from('conversations')
+        .insert({ equipment_id: item.id, renter_id: user.id, owner_id: item.ownerId })
+        .select('id').single();
+      if (err || !data) {
+        setBusy(false);
+        return setError(err?.message ?? 'Could not start the conversation.');
+      }
+      conversationId = data.id;
+    }
+    setBusy(false);
+    onClose();
+    router.push(`/chat/${conversationId}`);
+  };
 
   // Reset the form each time a different machine is opened.
   useEffect(() => {
@@ -273,7 +298,12 @@ export function EquipmentModal({ item, onClose }: { item: Equipment | null; onCl
                       </View>
                     ) : null}
                     <ErrorText>{error}</ErrorText>
-                    <Button label="Send booking request →" onPress={submit} loading={busy} disabled={clash} style={{ marginTop: 18, alignSelf: 'flex-start' }} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }}>
+                      <Button label="Send booking request →" onPress={submit} loading={busy} disabled={clash} />
+                      {item.ownerId && item.ownerId !== user?.id && isSupabaseConfigured ? (
+                        <Button variant="secondary" label="💬 Message owner" onPress={messageOwner} disabled={busy} />
+                      ) : null}
+                    </View>
                     <Notice>You pay only after the owner approves. Your payment is held securely until the rental is complete.</Notice>
                   </View>
                 )}
