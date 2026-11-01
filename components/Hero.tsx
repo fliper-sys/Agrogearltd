@@ -29,14 +29,14 @@ export function Hero({ onExplore, onList }: { onExplore: () => void; onList: () 
             fontSize: h1Size,
             lineHeight: h1Size * 1.05,
             letterSpacing: isSm ? -1.5 : -2.5,
-            fontWeight: '800',
-            marginVertical: 15,
+            fontWeight: '900',
+            marginVertical: 17,
             maxWidth: 590,
           }}
         >
           {'The right machine.\nThe right season.'}
         </T>
-        <T style={{ color: colors.heroText, lineHeight: 27, maxWidth: 480, fontSize: 16 }}>
+        <T style={{ color: colors.heroText, lineHeight: 28, maxWidth: 490, fontSize: 16 }}>
           Discover, rent, and list agricultural machinery in one trusted marketplace built for African farmers.
         </T>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
@@ -48,7 +48,7 @@ export function Hero({ onExplore, onList }: { onExplore: () => void; onList: () 
       <View
         style={{
           flex: isMd ? undefined : 0.8,
-          minHeight: isMd ? 220 : 250,
+          minHeight: isMd ? 230 : 270,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -59,6 +59,8 @@ export function Hero({ onExplore, onList }: { onExplore: () => void; onList: () 
             height: circle,
             borderRadius: circle / 2,
             backgroundColor: colors.heroCircle,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.12)',
             alignItems: 'center',
             justifyContent: 'center',
           }}

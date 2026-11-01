@@ -28,7 +28,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           style={[
             {
               position: 'absolute',
-              bottom: 22,
+              bottom: 26,
               left: 0,
               right: 0,
               alignItems: 'center',
@@ -42,11 +42,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             style={
               {
                 backgroundColor: colors.toast,
-                paddingVertical: 13,
-                paddingHorizontal: 20,
-                borderRadius: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 22,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderColor: '#ffffff24',
                 maxWidth: '90%',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.13)',
+                boxShadow: '0 14px 34px rgba(15,45,29,0.22)',
               } as any
             }
           >

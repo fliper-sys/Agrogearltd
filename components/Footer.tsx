@@ -13,7 +13,9 @@ export function Footer() {
     <View
       style={{
         backgroundColor: colors.footer,
-        paddingVertical: 32,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.08)',
+        paddingVertical: 38,
         paddingHorizontal: isSm ? 16 : '6%',
         flexDirection: 'row',
         justifyContent: 'space-between',

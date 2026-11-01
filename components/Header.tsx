@@ -85,7 +85,7 @@ export function Header({ favouriteCount = 0, showingFavourites = false, onMarket
           borderBottomColor: colors.line,
           zIndex: 10,
         },
-        web({ backdropFilter: 'blur(8px)' }),
+        web({ backdropFilter: 'blur(12px)', position: 'sticky', top: 0, boxShadow: '0 4px 18px rgba(20,63,45,0.035)' }),
       ]}
     >
       <View
