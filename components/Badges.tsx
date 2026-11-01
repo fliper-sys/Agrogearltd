@@ -14,7 +14,9 @@ export function VerifiedBadge({ small }: { small?: boolean }) {
         gap: 4,
         backgroundColor: '#e3f3e9',
         borderRadius: 99,
-        paddingVertical: small ? 2 : 4,
+        borderWidth: 1,
+        borderColor: '#cce5d4',
+        paddingVertical: small ? 3 : 5,
         paddingHorizontal: small ? 7 : 10,
         alignSelf: 'flex-start',
       }}
@@ -49,7 +51,7 @@ const STATUS: Record<BookingStatus, { label: string; bg: string; fg: string }> =
 export function StatusPill({ status }: { status: BookingStatus }) {
   const s = STATUS[status];
   return (
-    <View style={{ backgroundColor: s.bg, borderRadius: 99, paddingVertical: 4, paddingHorizontal: 10, alignSelf: 'flex-start' }}>
+    <View style={{ backgroundColor: s.bg, borderRadius: 99, borderWidth: 1, borderColor: `${s.fg}22`, paddingVertical: 5, paddingHorizontal: 11, alignSelf: 'flex-start' }}>
       <T style={{ color: s.fg, fontSize: 11, fontWeight: '800' }}>{s.label}</T>
     </View>
   );

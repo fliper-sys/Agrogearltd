@@ -15,7 +15,7 @@ export function StatusBanners() {
   return (
     <>
       {isSuspended ? (
-        <View style={{ backgroundColor: colors.coral, paddingVertical: 10, paddingHorizontal: 16 }}>
+        <View style={{ backgroundColor: colors.coral, paddingVertical: 12, paddingHorizontal: 18 }}>
           <T style={{ color: '#fff', fontSize: 13, fontWeight: '700', textAlign: 'center' }}>
             Your account is restricted{profile?.suspendedReason ? `: ${profile.suspendedReason}` : '.'} You can browse, but cannot list, book or message.
           </T>
@@ -24,8 +24,8 @@ export function StatusBanners() {
       {sharingConversationId ? (
         <View
           style={{
-            backgroundColor: colors.green,
-            paddingVertical: 9,
+            backgroundColor: colors.footer,
+            paddingVertical: 11,
             paddingHorizontal: 16,
             flexDirection: 'row',
             alignItems: 'center',

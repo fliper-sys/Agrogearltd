@@ -55,18 +55,19 @@ export function Button({
       style={((state: any) => [
         {
           backgroundColor: state.hovered ? v.hover : v.bg,
-          borderRadius: 12,
+          borderRadius: 14,
+          minHeight: small ? 36 : 46,
           borderWidth: v.border ? 1 : 0,
           borderColor: v.border,
-          paddingVertical: small ? 9 : isPrimaryish ? 12 : 11,
-          paddingHorizontal: small ? 12 : isPrimaryish ? 18 : 16,
+          paddingVertical: small ? 9 : isPrimaryish ? 13 : 12,
+          paddingHorizontal: small ? 14 : isPrimaryish ? 20 : 18,
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'row',
           gap: 8,
           opacity: disabled ? 0.55 : state.pressed ? 0.9 : 1,
         },
-        web({ cursor: disabled ? 'not-allowed' : 'pointer', transition: 'background-color .15s' }),
+        web({ cursor: disabled ? 'not-allowed' : 'pointer', transition: 'background-color .18s, transform .18s, box-shadow .18s' }),
         style,
       ]) as any}
     >
@@ -117,8 +118,8 @@ export const inputBox: TextStyle = {
   width: '100%',
   borderWidth: 1,
   borderColor: colors.chipBorder,
-  borderRadius: 11,
-  padding: 12,
+  borderRadius: 13,
+  padding: 14,
   backgroundColor: '#fff',
   color: colors.ink,
   fontSize: 14,
@@ -142,7 +143,7 @@ export function TextField(props: TextInputProps & { multiline?: boolean }) {
       style={[
         inputBox,
         props.multiline ? { minHeight: 90, textAlignVertical: 'top' } : null,
-        focused ? { borderColor: '#8cb89b' } : null,
+        focused ? { borderColor: colors.green2, borderWidth: 1.5, backgroundColor: '#fcfefb' } : null,
         web({ outlineStyle: 'none' }),
         props.style,
       ]}
@@ -218,11 +219,12 @@ export function Chip({ label, active, onPress }: { label: string; active?: boole
           paddingVertical: 9,
           paddingHorizontal: 15,
           borderRadius: 99,
+          minHeight: 38,
           borderWidth: 1,
           borderColor: active ? colors.green : s.hovered ? '#c3cfbf' : colors.chipBorder,
-          backgroundColor: active ? colors.green : '#fff',
+          backgroundColor: active ? colors.green : '#fbfcfa',
         },
-        web({ cursor: 'pointer', transition: 'all .15s' }),
+        web({ cursor: 'pointer', transition: 'all .18s' }),
       ]) as any}
     >
       <T style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : colors.chipText }}>{label}</T>

@@ -30,17 +30,17 @@ export function EquipmentCard({
           backgroundColor: '#fff',
           borderWidth: 1,
           borderColor: colors.line,
-          borderRadius: 20,
+          borderRadius: 22,
           overflow: 'hidden',
+          boxShadow: s.hovered ? '0 18px 42px rgba(20,63,45,0.13)' : '0 5px 18px rgba(20,63,45,0.045)',
           transform: [{ translateY: s.hovered ? -3 : 0 }],
-          boxShadow: s.hovered ? '0 14px 32px rgba(24,62,36,0.09)' : '0 0 0 rgba(0,0,0,0)',
         },
         web({ cursor: 'pointer', transition: 'transform .2s, box-shadow .2s' }),
       ]) as any}
     >
       <View
         style={{
-          height: isSm ? 205 : 190,
+          height: isSm ? 210 : 198,
           backgroundColor: item.color || '#e8eee4',
           alignItems: 'center',
           justifyContent: 'center',
@@ -54,7 +54,9 @@ export function EquipmentCard({
             backgroundColor: '#fff',
             paddingVertical: 7,
             paddingHorizontal: 10,
-            borderRadius: 8,
+            borderRadius: 9,
+            borderWidth: 1,
+            borderColor: 'rgba(20,63,45,0.06)',
           }}
         >
           <T style={{ fontSize: 10, fontWeight: '800' }}>{item.badge || item.category}</T>
@@ -93,7 +95,7 @@ export function EquipmentCard({
       </View>
 
       <View style={{ padding: 18 }}>
-        <T style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.3 }}>{item.name}</T>
+        <T style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.45 }}>{item.name}</T>
         <T style={{ fontSize: 12, color: colors.muted, marginTop: 8 }}>
           ⌖ {item.location} · {item.category}
         </T>
@@ -113,7 +115,7 @@ export function EquipmentCard({
           style={{
             borderTopWidth: 1,
             borderTopColor: colors.line,
-            paddingTop: 14,
+            paddingTop: 15,
             marginTop: 15,
             flexDirection: 'row',
             justifyContent: 'space-between',
